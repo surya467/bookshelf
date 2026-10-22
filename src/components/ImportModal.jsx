@@ -1,17 +1,36 @@
 import React, { useState } from 'react';
-import { X, Upload, FileText, Check } from 'lucide-react';
+import { X, Upload, FileText } from 'lucide-react';
 import { parseGoodreadsCSV } from '../services/goodreadsParser';
 
-export default function ImportModal({ onClose, onImportCSV, onLoadDexterSample }) {
+export default function ImportModal({ onClose, onImportCSV, currentUserName }) {
   const [csvText, setCsvText] = useState('');
   const [fileName, setFileName] = useState('');
+  const [userName, setUserName] = useState(currentUserName || '');
   const [error, setError] = useState('');
+
+  const extractNameFromFileName = (name) => {
+    if (!name) return '';
+    const base = name.replace(/\.[^/.]+$/, '');
+    const cleaned = base
+      .replace(/(goodreads|library|export|bookshelf|books|data)/gi, '')
+      .replace(/[^a-zA-Z0-9]/g, ' ')
+      .trim();
+    if (cleaned.length >= 2 && cleaned.length <= 25) {
+      return cleaned.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+    return '';
+  };
 
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setFileName(file.name);
+    const detected = extractNameFromFileName(file.name);
+    if (detected && !userName) {
+      setUserName(detected);
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result;
@@ -34,7 +53,7 @@ export default function ImportModal({ onClose, onImportCSV, onLoadDexterSample }
       setError('No valid books found in CSV.');
       return;
     }
-    onImportCSV(books);
+    onImportCSV(books, userName.trim());
     onClose();
   };
 
@@ -57,26 +76,21 @@ export default function ImportModal({ onClose, onImportCSV, onLoadDexterSample }
           Import Your Library
         </h2>
         <p className="text-xs text-[#86868b] mt-1">
-          Upload your Goodreads CSV. Read books will populate in color, and missing series companions will appear in grey.
+          Upload your Goodreads CSV file. Your read books will populate in full color, and missing series companions will appear in grey.
         </p>
 
-        {/* Quick Sample Button */}
-        <div className="mt-6 p-4 rounded-2xl bg-[#f5f5f7] border border-black/[0.03] flex items-center justify-between gap-4">
-          <div>
-            <div className="text-xs font-semibold text-[#1d1d1f]">Dexter's Goodreads Export</div>
-            <p className="text-[11px] text-[#86868b] mt-0.5">
-              Harry Potter 1–3, The Hobbit, and Piano Solos.
-            </p>
-          </div>
-          <button
-            onClick={() => {
-              onLoadDexterSample();
-              onClose();
-            }}
-            className="bg-[#1d1d1f] hover:bg-[#333336] text-white font-medium text-xs px-4 py-2 rounded-full transition-all active:scale-95 shadow-sm"
-          >
-            Load Sample
-          </button>
+        {/* Reader Name Field */}
+        <div className="mt-5 text-left">
+          <label className="block text-xs font-medium text-[#86868b] mb-1 ml-1">
+            Reader Name (Optional)
+          </label>
+          <input
+            type="text"
+            value={userName}
+            onChange={(e) => setUserName(e.target.value)}
+            placeholder="e.g. Surya"
+            className="w-full bg-[#f5f5f7] border border-black/[0.06] rounded-2xl px-4 py-2 text-sm text-[#1d1d1f] focus:outline-none focus:border-[#0071e3] transition-all"
+          />
         </div>
 
         {/* File Drag & Drop / File Input */}

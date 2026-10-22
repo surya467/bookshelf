@@ -1,21 +1,86 @@
-import React from 'react';
-import { ArrowRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowRight, Edit2, Check, RefreshCw } from 'lucide-react';
 
-export default function StatsHeader({ stats, onSwitchToMarket }) {
+export default function StatsHeader({
+  stats,
+  userName,
+  onUpdateUserName,
+  onSwitchToMarket,
+  onResetLibrary,
+}) {
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(userName || '');
+
   const { totalRead, totalMissing, totalSeries, completedSeries, completionRate, totalMissingCost } = stats;
+
+  const handleSaveName = () => {
+    onUpdateUserName(nameInput.trim());
+    setIsEditingName(false);
+  };
+
+  const displayName = userName
+    ? `${userName}'s Library`
+    : 'Your Library';
 
   return (
     <div className="bg-white rounded-[32px] p-8 sm:p-10 border border-black/[0.04] shadow-[0_4px_24px_rgba(0,0,0,0.04)] mb-8">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
         <div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-[#0071e3]">
-            Series Completionist
-          </span>
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-[#1d1d1f] mt-1.5">
-            Your Library
-          </h1>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[#0071e3]">
+              Series Completionist
+            </span>
+            <button
+              onClick={onResetLibrary}
+              className="text-xs text-[#86868b] hover:text-[#1d1d1f] flex items-center gap-1 transition-colors ml-2"
+              title="Import a different CSV"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Change CSV</span>
+            </button>
+          </div>
+
+          {/* Dynamic / Editable Title */}
+          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+            {isEditingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                  placeholder="Your Name"
+                  autoFocus
+                  className="text-2xl sm:text-4xl font-semibold text-[#1d1d1f] bg-[#f5f5f7] rounded-xl px-3 py-1 border border-[#0071e3] focus:outline-none"
+                />
+                <button
+                  onClick={handleSaveName}
+                  className="p-2 rounded-xl bg-[#0071e3] text-white hover:bg-[#0077ed] transition-all"
+                >
+                  <Check className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5 group">
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-[#1d1d1f]">
+                  {displayName}
+                </h1>
+                <button
+                  onClick={() => {
+                    setNameInput(userName || '');
+                    setIsEditingName(true);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full hover:bg-[#f5f5f7] text-[#86868b] hover:text-[#1d1d1f] transition-all"
+                  title="Rename Library"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+
           <p className="text-sm sm:text-base text-[#86868b] mt-2 max-w-xl leading-relaxed">
-            Books you have read appear in full vibrant color. Missing companion books in your series are greyed out with direct links to complete your collection.
+            Books you have read appear in full vibrant color. Missing companion volumes in your series appear in minimal grey with instant purchase options.
           </p>
         </div>
 
