@@ -167,6 +167,56 @@ export async function resolveBookCover({ title, author = '', isbn = '', isbn13 =
 }
 
 /**
+ * Instant synchronous cover lookup (checks ISBN direct CDN and localStorage cache).
+ * Returns immediately in 0ms without any network blocking.
+ */
+export function getInstantCachedCover({ title, author = '', isbn = '', isbn13 = '' }) {
+  const cleanIsbn = String(isbn13 || isbn || '').replace(/[^0-9X]/gi, '');
+  if (cleanIsbn) {
+    return getOpenLibraryCoverUrl(cleanIsbn, 'isbn', 'L');
+  }
+  const cleanTitle = cleanTitleForSearch(title);
+  const cleanAuthor = String(author || '').split(/[,&/]/)[0].trim();
+  const cacheKey = `${cleanTitle}_${cleanAuthor}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const cache = getCoverCache();
+  return cache[cacheKey] || null;
+}
+
+/**
+ * Background non-blocking cover enrichment worker.
+ * Batches lookups in parallel groups of 6 with short timeouts so UI never lags.
+ */
+export async function enrichCoversInBackground(books, apiSettings = {}, onCoverFound) {
+  if (!books || books.length === 0) return;
+  const missing = books.filter((b) => !b.coverUrl);
+  if (missing.length === 0) return;
+
+  const BATCH_SIZE = 6;
+  for (let i = 0; i < missing.length; i += BATCH_SIZE) {
+    const batch = missing.slice(i, i + BATCH_SIZE);
+    await Promise.allSettled(
+      batch.map(async (b) => {
+        try {
+          const coverUrl = await resolveBookCover({
+            title: b.title,
+            author: b.author,
+            isbn: b.isbn,
+            isbn13: b.isbn13,
+            googleApiKey: apiSettings.googleApiKey,
+            hardcoverToken: apiSettings.hardcoverToken,
+          });
+          if (coverUrl && onCoverFound) {
+            onCoverFound(b.id, coverUrl);
+          }
+        } catch (e) {
+          // ignore error
+        }
+      })
+    );
+  }
+}
+
+/**
  * Searches Open Library by title and author.
  */
 export async function searchOpenLibraryBooks(title, author = '', limit = 10) {

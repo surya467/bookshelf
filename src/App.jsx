@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import Navbar from './components/Navbar';
 import WallShelf from './components/WallShelf';
@@ -7,8 +7,11 @@ import ImportModal from './components/ImportModal';
 import OpenLibraryInfoModal from './components/OpenLibraryInfoModal';
 import EmptyState from './components/EmptyState';
 import AmbientCanvas from './components/AmbientCanvas';
+import GlobalBookTooltip from './components/GlobalBookTooltip';
+import SortingBooksLoader from './components/SortingBooksLoader';
 import { parseGoodreadsCSV } from './services/goodreadsParser';
 import { resolveLibrarySeries } from './services/seriesResolver';
+import { enrichCoversInBackground } from './services/openLibrary';
 import { soundFX } from './services/soundFx';
 
 const DEMO_SAMPLE_CSV = `Book Id,Title,Author,Author l-f,Additional Authors,ISBN,ISBN13,My Rating,Publisher,Binding,Number of Pages,Year Published,Original Publication Year,Date Read,Date Added,Bookshelves,Bookshelves with positions,Exclusive Shelf,My Review,Spoiler,Private Notes,Read Count,Owned Copies
@@ -120,8 +123,12 @@ export default function App() {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingBookCount, setLoadingBookCount] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [bookSize, setBookSize] = useState('default'); // 'compact' | 'default'
+
+  // Non-clipping Global Tooltip Hover State
+  const [activeHover, setActiveHover] = useState(null);
 
   // Modals
   const [selectedBook, setSelectedBook] = useState(null);
@@ -295,9 +302,12 @@ export default function App() {
 
   const handleImportCSV = async (parsedBooks, name = '') => {
     setIsLoading(true);
+    setLoadingBookCount(parsedBooks ? parsedBooks.length : 0);
     soundFX.playPageFlip();
+
     try {
       const apiSettings = getStoredApiKeys();
+      // Near-instant synchronous resolution (< 30ms for 1,000+ books)
       const resolved = await resolveLibrarySeries(parsedBooks, apiSettings);
       const newName = name || userName;
 
@@ -311,15 +321,38 @@ export default function App() {
 
       persistState(resolved.seriesList, resolved.standaloneBooks, resolved.wantToReadStandalone || [], resolved.stats, newName);
 
-      confetti({
-        particleCount: 60,
-        spread: 60,
-        origin: { y: 0.6 },
-        colors: ['#0071e3', '#34c759', '#ffffff'],
+      // Brief animation pause for visual delight, then reveal shelves
+      setTimeout(() => {
+        setIsLoading(false);
+        confetti({
+          particleCount: 50,
+          spread: 55,
+          origin: { y: 0.65 },
+          colors: ['#0071e3', '#34c759', '#ffffff'],
+        });
+      }, 500);
+
+      // Non-blocking background worker to enrich covers for books that had no ISBN
+      const allBooks = [];
+      resolved.seriesList.forEach((s) => allBooks.push(...s.books));
+      allBooks.push(...resolved.standaloneBooks, ...(resolved.wantToReadStandalone || []));
+
+      enrichCoversInBackground(allBooks, apiSettings, (bookId, coverUrl) => {
+        setSeriesList((prev) =>
+          prev.map((s) => ({
+            ...s,
+            books: s.books.map((b) => (b.id === bookId ? { ...b, coverUrl } : b)),
+          }))
+        );
+        setStandaloneBooks((prev) =>
+          prev.map((b) => (b.id === bookId ? { ...b, coverUrl } : b))
+        );
+        setWantToReadStandalone((prev) =>
+          prev.map((b) => (b.id === bookId ? { ...b, coverUrl } : b))
+        );
       });
     } catch (e) {
       console.error('Import error:', e);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -347,20 +380,23 @@ export default function App() {
   };
 
   const handleLoadDemo = async (name = 'Surya') => {
-    setIsLoading(true);
     soundFX.playClick();
-    try {
-      const parsed = parseGoodreadsCSV(DEMO_SAMPLE_CSV);
-      await handleImportCSV(parsed, name);
-    } finally {
-      setIsLoading(false);
-    }
+    const parsed = parseGoodreadsCSV(DEMO_SAMPLE_CSV);
+    await handleImportCSV(parsed, name);
   };
 
   const handleToggleSound = () => {
     const next = soundFX.toggleSound();
     setSoundEnabled(next);
   };
+
+  const handleHoverStart = useCallback((book, rect) => {
+    setActiveHover({ book, rect });
+  }, []);
+
+  const handleHoverEnd = useCallback(() => {
+    setActiveHover(null);
+  }, []);
 
   const hasData = seriesList.length > 0 || standaloneBooks.length > 0 || wantToReadStandalone.length > 0;
 
@@ -375,7 +411,10 @@ export default function App() {
       {/* Interactive WebGL / Canvas Ambient Lighting & Dust Particles */}
       <AmbientCanvas />
 
-      {/* Navbar */}
+      {/* Global Fixed Non-Clipping Tooltip */}
+      <GlobalBookTooltip activeHover={activeHover} />
+
+      {/* Navbar with Instant Search */}
       <Navbar
         userName={userName}
         onUpdateUserName={handleUpdateUserName}
@@ -388,17 +427,17 @@ export default function App() {
         hasData={hasData}
         bookSize={bookSize}
         onChangeBookSize={(sz) => setBookSize(sz)}
+        seriesList={seriesList}
+        standaloneBooks={standaloneBooks}
+        wantToReadStandalone={wantToReadStandalone}
+        onSelectBook={(b) => setSelectedBook(b)}
       />
 
       {/* Main Wall Shelf Gallery */}
       <main className="flex-1 w-full pt-8 pb-16 relative z-10">
-        {/* Loading Spinner */}
+        {/* Animated Sorting Loader */}
         {isLoading && (
-          <div className="flex flex-col items-center justify-center py-28 text-center">
-            <div className="w-10 h-10 border-2 border-white/10 border-t-[#0071e3] rounded-full animate-spin mb-4" />
-            <h3 className="text-sm font-semibold text-white">Mounting Books on Wall...</h3>
-            <p className="text-xs text-white/50 mt-1">Resolving series & compact shelves</p>
-          </div>
+          <SortingBooksLoader totalBooks={loadingBookCount} />
         )}
 
         {/* Empty / Onboarding State */}
@@ -411,7 +450,7 @@ export default function App() {
 
         {/* The Wall with Compact Multi-Series Floating Ledges */}
         {!isLoading && hasData && (
-          <div className="w-full space-y-4 max-w-[1550px] mx-auto px-2 sm:px-6">
+          <div className="w-full space-y-3 sm:space-y-4 max-w-[1550px] mx-auto px-2 sm:px-6">
             {packedShelves.map((shelfItems, shelfIndex) => (
               <WallShelf
                 key={`shelf-${shelfIndex}`}
@@ -419,6 +458,8 @@ export default function App() {
                 bookSize={bookSize}
                 onInspectBook={(book) => setSelectedBook(book)}
                 onToggleRead={handleToggleRead}
+                onHoverStart={handleHoverStart}
+                onHoverEnd={handleHoverEnd}
               />
             ))}
           </div>

@@ -2,7 +2,7 @@
 // Combines parsed Goodreads data with Curated Series and strict author-verified series logic
 
 import { findCuratedSeries } from './seriesDatabase.js';
-import { getOpenLibraryCoverUrl, getPurchaseLinks, resolveBookCover } from './openLibrary.js';
+import { getOpenLibraryCoverUrl, getPurchaseLinks, getInstantCachedCover } from './openLibrary.js';
 
 /**
  * Normalizes title strings for fuzzy matching
@@ -14,24 +14,6 @@ function cleanForMatch(str) {
     .replace(/^the\s+/, '')
     .replace(/[^a-z0-9]/g, '')
     .trim();
-}
-
-/**
- * Helper to get or dynamically resolve cover using multi-provider fallback
- */
-async function getCoverForBook(book, apiSettings = {}) {
-  const cleanIsbn = book.isbn13 || book.isbn;
-  if (cleanIsbn) {
-    return getOpenLibraryCoverUrl(cleanIsbn, 'isbn', 'L');
-  }
-  return await resolveBookCover({
-    title: book.title,
-    author: book.author,
-    isbn: cleanIsbn,
-    isbn13: book.isbn13,
-    googleApiKey: apiSettings.googleApiKey,
-    hardcoverToken: apiSettings.hardcoverToken,
-  });
 }
 
 /**
@@ -127,7 +109,7 @@ export async function resolveLibrarySeries(parsedBooks, apiSettings = {}) {
     } else {
       // Standalone book (no series detected)
       const cleanIsbn = book.isbn13 || book.isbn;
-      let coverUrl = cleanIsbn ? getOpenLibraryCoverUrl(cleanIsbn, 'isbn', 'L') : null;
+      let coverUrl = getInstantCachedCover(book);
 
       const formatted = {
         ...book,
@@ -287,7 +269,7 @@ export async function resolveLibrarySeries(parsedBooks, apiSettings = {}) {
           isRead,
           isGreyedOut: !isRead,
           isWantToRead,
-          coverUrl: cleanIsbn ? getOpenLibraryCoverUrl(cleanIsbn, 'isbn', 'L') : null,
+          coverUrl: getInstantCachedCover(ub),
           purchaseLinks: getPurchaseLinks(ub.title, ub.author, cleanIsbn),
           price: 14.99,
         };
@@ -306,13 +288,6 @@ export async function resolveLibrarySeries(parsedBooks, apiSettings = {}) {
 
       cleanSeriesBooks.sort((a, b) => a.order - b.order);
 
-      // Dynamically resolve covers for books missing ISBN
-      for (const b of cleanSeriesBooks) {
-        if (!b.coverUrl) {
-          b.coverUrl = await getCoverForBook(b, apiSettings);
-        }
-      }
-
       const readCount = cleanSeriesBooks.filter((b) => b.isRead).length;
       const totalCount = cleanSeriesBooks.length;
       const percent = Math.round((readCount / totalCount) * 100);
@@ -329,18 +304,6 @@ export async function resolveLibrarySeries(parsedBooks, apiSettings = {}) {
         completionPercent: percent,
         isCompleted: readCount === totalCount,
       });
-    }
-  }
-
-  // Enrich covers for standalone books missing ISBN
-  for (const b of standaloneBooks) {
-    if (!b.coverUrl) {
-      b.coverUrl = await getCoverForBook(b, apiSettings);
-    }
-  }
-  for (const b of wantToReadStandalone) {
-    if (!b.coverUrl) {
-      b.coverUrl = await getCoverForBook(b, apiSettings);
     }
   }
 

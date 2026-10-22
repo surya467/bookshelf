@@ -1,9 +1,17 @@
-import React, { useState } from 'react';
-import { Lock, Bookmark, Check, Star } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Lock, Bookmark, Check } from 'lucide-react';
 
-export default function Book3D({ book, onInspect, onToggleRead, size = 'default' }) {
+export default function Book3D({
+  book,
+  onInspect,
+  onToggleRead,
+  size = 'default',
+  onHoverStart,
+  onHoverEnd,
+}) {
   const [imgError, setImgError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const containerRef = useRef(null);
 
   const isRead = !!book.isRead;
   const isWantToRead = !!book.isWantToRead;
@@ -17,18 +25,35 @@ export default function Book3D({ book, onInspect, onToggleRead, size = 'default'
       ? 'w-[84px] sm:w-[98px] md:w-[110px]'
       : 'w-[68px] sm:w-[78px] md:w-[86px]';
 
+  const handleMouseEnter = () => {
+    setIsHovered(true);
+    if (onHoverStart && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      onHoverStart(book, rect);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setIsHovered(false);
+    if (onHoverEnd) {
+      onHoverEnd();
+    }
+  };
+
   return (
     <div
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      ref={containerRef}
+      id={`book-${book.id}`}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       onClick={() => onInspect(book)}
-      className="group relative cursor-pointer select-none flex-shrink-0 transition-all duration-300 ease-out z-10 hover:z-50"
+      className="group relative cursor-pointer select-none flex-shrink-0 transition-all duration-300 ease-out z-10 hover:z-40"
     >
       {/* 3D Physical Book Structure */}
       <div
         className={`relative ${sizeClasses} aspect-[1/1.52] rounded-r-[4px] rounded-l-[1.5px] transition-all duration-300 ease-out transform ${
           isHovered
-            ? '-translate-y-3 scale-[1.06] rotate-[-1deg] book-3d-shadow-hover'
+            ? '-translate-y-3.5 scale-[1.05] rotate-[-0.8deg] book-3d-shadow-hover'
             : 'book-3d-shadow'
         }`}
       >
@@ -106,33 +131,6 @@ export default function Book3D({ book, onInspect, onToggleRead, size = 'default'
         {/* Contact Shadow Underneath Book on Shelf */}
         <div className="absolute -bottom-1.5 inset-x-1.5 h-2 bg-black/80 blur-[2.5px] rounded-full pointer-events-none" />
       </div>
-
-      {/* Hover Mini Tooltip Floating Above Book */}
-      {isHovered && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2.5 rounded-xl bg-[#161820]/95 backdrop-blur-xl border border-white/15 text-white shadow-[0_12px_28px_rgba(0,0,0,0.85)] z-50 pointer-events-none animate-fadeIn">
-          <p className="text-[11px] font-semibold text-white leading-tight line-clamp-2">
-            {book.title}
-          </p>
-          <p className="text-[9px] text-white/60 mt-0.5 truncate">{book.author}</p>
-          
-          <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-white/10 text-[9px]">
-            {isRead ? (
-              <span className="text-emerald-400 font-medium flex items-center gap-1">
-                <Check className="w-2.5 h-2.5" /> Read
-              </span>
-            ) : isWantToRead ? (
-              <span className="text-[#0071e3] font-medium flex items-center gap-1">
-                <Bookmark className="w-2.5 h-2.5 fill-[#0071e3]" /> Want to Read
-              </span>
-            ) : (
-              <span className="text-white/50 font-medium flex items-center gap-1">
-                <Lock className="w-2.5 h-2.5" /> Missing Tome
-              </span>
-            )}
-            <span className="text-white/40 text-[8px] underline">Click for details</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

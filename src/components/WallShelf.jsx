@@ -11,6 +11,8 @@ export default function WallShelf({
   onInspectBook,
   onToggleRead,
   bookSize = 'default',
+  onHoverStart,
+  onHoverEnd,
 }) {
   // Normalize items for the shelf
   let items = [];
@@ -28,7 +30,7 @@ export default function WallShelf({
   if (items.length === 0) return null;
 
   return (
-    <div className="relative mb-14 sm:mb-16 animate-fadeIn">
+    <div className="relative mb-14 sm:mb-16 animate-fadeIn w-full">
       {/* Scrollable / Responsive Content Container */}
       <div className="relative w-full overflow-x-auto pb-0 pt-4 px-4 sm:px-8 scrollbar-none">
         <div className="flex items-end gap-2 sm:gap-3 min-w-max mx-auto justify-start">
@@ -40,7 +42,7 @@ export default function WallShelf({
               return (
                 <React.Fragment key={s.id || `series-${itemIdx}`}>
                   {/* Series Block */}
-                  <div className="flex flex-col flex-shrink-0">
+                  <div id={`series-${s.id || itemIdx}`} className="flex flex-col flex-shrink-0 scroll-mt-24">
                     {/* Series Title: Placed at the top starting from the left of the 1st book */}
                     <div className="flex items-center gap-2 mb-2 pl-0.5 select-none">
                       <span className="text-[12px] sm:text-[13px] font-semibold text-white/95 tracking-tight truncate max-w-[200px] sm:max-w-[300px]">
@@ -65,6 +67,8 @@ export default function WallShelf({
                           size={bookSize}
                           onInspect={onInspectBook}
                           onToggleRead={onToggleRead}
+                          onHoverStart={onHoverStart}
+                          onHoverEnd={onHoverEnd}
                         />
                       ))}
                     </div>
@@ -87,7 +91,7 @@ export default function WallShelf({
               return (
                 <React.Fragment key={`standalone-${itemIdx}`}>
                   {/* Standalone Books Block Sitting in Remaining Space */}
-                  <div className="flex flex-col flex-shrink-0">
+                  <div className="flex flex-col flex-shrink-0 scroll-mt-24">
                     {/* Standalone Header starting from left of first book */}
                     <div className="flex items-center gap-2 mb-2 pl-0.5 select-none">
                       <span className="text-[12px] sm:text-[13px] font-semibold text-white/70 tracking-tight">
@@ -107,6 +111,8 @@ export default function WallShelf({
                           size={bookSize}
                           onInspect={onInspectBook}
                           onToggleRead={onToggleRead}
+                          onHoverStart={onHoverStart}
+                          onHoverEnd={onHoverEnd}
                         />
                       ))}
                     </div>
@@ -127,14 +133,30 @@ export default function WallShelf({
         </div>
       </div>
 
-      {/* Realistic Floating Dark Architectural Shelf Ledge Underneath Books */}
-      <div className="relative w-full max-w-[98%] mx-auto z-0 -mt-1">
-        {/* Shelf Top Face with Beveled Edge */}
-        <div className="h-2 w-full bg-gradient-to-b from-[#2b2e3a] to-[#1a1c24] border-t border-white/25" />
-        {/* Shelf Front Fascia Rail */}
-        <div className="h-3 w-full shelf-ledge-dark" />
-        {/* Soft Ambient LED Glow Cast onto Black Wall Underneath */}
-        <div className="h-6 w-full shelf-ambient-glow -mt-1 pointer-events-none" />
+      {/* Realistic Continuous Floating Architectural Shelf Ledge with Sculpted End Caps */}
+      <div className="relative w-full z-0 -mt-1 px-1 sm:px-2">
+        {/* Top Metallic Bevel Running Full Width */}
+        <div className="relative h-2 w-full bg-gradient-to-b from-[#2e313e] to-[#181a22] border-t border-white/25 rounded-t-[4px]">
+          {/* Left Sculpted Edge Cap */}
+          <div className="absolute left-0 inset-y-0 w-3 rounded-tl-[4px] bg-gradient-to-r from-white/25 to-transparent border-l border-white/30" />
+          {/* Right Sculpted Edge Cap */}
+          <div className="absolute right-0 inset-y-0 w-3 rounded-tr-[4px] bg-gradient-to-l from-white/25 to-transparent border-r border-white/30" />
+        </div>
+
+        {/* Shelf Front Fascia Rail with Polished Metallic Trim */}
+        <div className="relative h-3.5 w-full shelf-ledge-dark rounded-b-[4px]">
+          {/* Left Finished Cap */}
+          <div className="absolute left-0 inset-y-0 w-2.5 rounded-bl-[4px] bg-gradient-to-r from-white/20 via-transparent to-transparent border-l border-white/25 shadow-sm" />
+          {/* Right Finished Cap */}
+          <div className="absolute right-0 inset-y-0 w-2.5 rounded-br-[4px] bg-gradient-to-l from-white/20 via-transparent to-transparent border-r border-white/25 shadow-sm" />
+        </div>
+
+        {/* Soft Ambient Warm/Cool LED Glow Cast onto Black Wall Underneath */}
+        <div className="h-8 w-full shelf-ambient-glow -mt-1 pointer-events-none" />
+
+        {/* Realistic Architectural Mounting Wall Brackets */}
+        <div className="absolute left-6 -bottom-2 w-2 h-3.5 bg-gradient-to-b from-zinc-600 to-black rounded-b border-x border-b border-white/10 opacity-75 shadow-sm pointer-events-none" />
+        <div className="absolute right-6 -bottom-2 w-2 h-3.5 bg-gradient-to-b from-zinc-600 to-black rounded-b border-x border-b border-white/10 opacity-75 shadow-sm pointer-events-none" />
       </div>
     </div>
   );
