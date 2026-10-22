@@ -6,7 +6,6 @@ import BookDetailModal from './components/BookDetailModal';
 import ImportModal from './components/ImportModal';
 import OpenLibraryInfoModal from './components/OpenLibraryInfoModal';
 import EmptyState from './components/EmptyState';
-import ReadingLamp from './components/ReadingLamp';
 import GlobalBookTooltip from './components/GlobalBookTooltip';
 import SortingBooksLoader from './components/SortingBooksLoader';
 import { parseGoodreadsCSV } from './services/goodreadsParser';
@@ -33,26 +32,19 @@ const getStoredApiKeys = () => {
   }
 };
 
-const getInitialTimeOfDay = () => {
-  const h = new Date().getHours();
-  if (h >= 6 && h < 11) return 'morning';
-  if (h >= 11 && h < 17) return 'afternoon';
-  if (h >= 17 && h < 20) return 'sunset';
-  return 'night';
-};
-
 function cleanForMatch(str) {
   if (!str) return '';
   return str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
 }
 
 /**
- * Intelligent Shelf Packing Algorithm:
- * - Packs multiple series onto a single shelf row.
- * - Fills any leftover space on a shelf with single/standalone books.
- * - Compares book counts against shelf capacity (e.g. 12-14 books per shelf).
+ * Intelligent Bounded Shelf Packing Algorithm:
+ * - Strictly enforces capacity so books never extend past the right edge of the window.
+ * - Long series larger than capacity are gracefully split into sequential shelf rows (e.g., 'Series (cont.)').
+ * - Smaller series are packed together on one shelf with clean dividers.
+ * - Leftover space on shelves is filled with standalone/wishlist books.
  */
-function packBookshelf(seriesList, standaloneBooks, wantToReadStandalone, capacity = 13) {
+function packBookshelf(seriesList, standaloneBooks, wantToReadStandalone, capacity = 10) {
   const shelves = [];
   let currentShelfItems = [];
   let currentShelfUsed = 0;
@@ -64,7 +56,33 @@ function packBookshelf(seriesList, standaloneBooks, wantToReadStandalone, capaci
   ];
   let singleBooksQueue = [...allSingleBooks];
 
-  for (const series of seriesList) {
+  // Pre-process: Chunk any series that has more books than shelf capacity
+  const chunkedSeriesList = [];
+  for (const s of seriesList) {
+    if (s.books.length <= capacity) {
+      chunkedSeriesList.push(s);
+    } else {
+      let offset = 0;
+      let part = 1;
+      while (offset < s.books.length) {
+        const chunk = s.books.slice(offset, offset + capacity);
+        chunkedSeriesList.push({
+          ...s,
+          id: `${s.id}-part-${part}`,
+          name: part === 1 ? s.name : `${s.name} (cont.)`,
+          books: chunk,
+          readCount: chunk.filter((b) => b.isRead).length,
+          totalCount: chunk.length,
+          isCompleted: chunk.every((b) => b.isRead),
+        });
+        offset += capacity;
+        part++;
+      }
+    }
+  }
+
+  // Pack series onto shelves
+  for (const series of chunkedSeriesList) {
     const seriesSize = series.books.length;
 
     // If this series fits on current shelf alongside already mounted series
@@ -137,14 +155,7 @@ export default function App() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingBookCount, setLoadingBookCount] = useState(0);
-  const [soundEnabled, setSoundEnabled] = useState(true);
   const [bookSize, setBookSize] = useState('default'); // 'compact' | 'default'
-
-  // Dynamic Bedroom Lighting Engine
-  const [timeOfDay, setTimeOfDay] = useState(getInitialTimeOfDay());
-  const [lampOn, setLampOn] = useState(getInitialTimeOfDay() === 'night');
-
-  const isNight = timeOfDay === 'night';
 
   // Non-clipping Global Tooltip Hover State
   const [activeHover, setActiveHover] = useState(null);
@@ -154,59 +165,59 @@ export default function App() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isOpenLibraryInfoOpen, setIsOpenLibraryInfoOpen] = useState(false);
 
-  // Auto adjust lamp on time of day changes
-  const handleTimeOfDayChange = (newTime) => {
-    setTimeOfDay(newTime);
-    if (newTime === 'night') {
-      setLampOn(true);
-    }
-  };
-
   // Check localStorage on mount
   useEffect(() => {
     try {
-      const savedData = localStorage.getItem(STORAGE_KEY_DATA);
-      const savedName = localStorage.getItem(STORAGE_KEY_NAME);
-
-      if (savedName) {
-        setUserName(savedName);
+      const cachedName = localStorage.getItem(STORAGE_KEY_NAME);
+      if (cachedName) {
+        setUserName(cachedName);
       }
-
-      if (savedData) {
-        const parsed = JSON.parse(savedData);
+      const raw = localStorage.getItem(STORAGE_KEY_DATA);
+      if (raw) {
+        const parsed = JSON.parse(raw);
         if (parsed.seriesList && parsed.seriesList.length > 0) {
           setSeriesList(parsed.seriesList);
           setStandaloneBooks(parsed.standaloneBooks || []);
           setWantToReadStandalone(parsed.wantToReadStandalone || []);
-          setStats(parsed.stats || {});
+          setStats(
+            parsed.stats || {
+              totalRead: 0,
+              totalWantToRead: 0,
+              totalMissing: 0,
+              totalSeries: 0,
+              completedSeries: 0,
+              completionRate: 0,
+              totalMissingCost: 0,
+            }
+          );
         }
       }
     } catch (e) {
-      console.warn('Could not restore from localStorage:', e);
+      console.warn('Could not read cached library data:', e);
     }
   }, []);
 
-  const persistState = (newSeriesList, newStandalone, newWantToRead, newStats, newName = userName) => {
+  const persistState = (newSeries, newStandalone, newWantToRead, newStats, nameToSave) => {
     try {
       localStorage.setItem(
         STORAGE_KEY_DATA,
         JSON.stringify({
-          seriesList: newSeriesList,
+          seriesList: newSeries,
           standaloneBooks: newStandalone,
           wantToReadStandalone: newWantToRead,
           stats: newStats,
         })
       );
-      if (newName) {
-        localStorage.setItem(STORAGE_KEY_NAME, newName);
+      if (nameToSave) {
+        localStorage.setItem(STORAGE_KEY_NAME, nameToSave);
       }
     } catch (e) {
-      console.warn('Could not save to localStorage:', e);
+      console.warn('Could not persist library data:', e);
     }
   };
 
   const handleToggleRead = (targetBook) => {
-    soundFX.init();
+    if (!targetBook) return;
     const willBeRead = !targetBook.isRead;
 
     if (willBeRead) {
@@ -215,7 +226,7 @@ export default function App() {
         particleCount: 40,
         spread: 50,
         origin: { y: 0.65 },
-        colors: ['#0071e3', '#34c759', '#fbfbfa'],
+        colors: ['#0071e3', '#34c759', '#ffffff'],
       });
     } else {
       soundFX.playClick();
@@ -247,20 +258,18 @@ export default function App() {
         return b;
       });
 
-      if (!changed) return s;
-
-      const readCount = updatedBooks.filter((b) => b.isRead).length;
-      const totalCount = updatedBooks.length;
-      const percent = Math.round((readCount / totalCount) * 100);
-
-      return {
-        ...s,
-        books: updatedBooks,
-        readCount,
-        missingCount: totalCount - readCount,
-        completionPercent: percent,
-        isCompleted: readCount === totalCount,
-      };
+      if (changed) {
+        const readCount = updatedBooks.filter((b) => b.isRead).length;
+        const totalCount = updatedBooks.length;
+        return {
+          ...s,
+          books: updatedBooks,
+          readCount,
+          totalCount,
+          isCompleted: readCount === totalCount,
+        };
+      }
+      return s;
     });
 
     let updatedStandalone = standaloneBooks.map((b) => {
@@ -287,49 +296,54 @@ export default function App() {
       return b;
     });
 
+    // Recompute library stats
     let totalRead = 0;
-    let totalWantToRead = 0;
     let totalMissing = 0;
-    let totalMissingCost = 0;
+    let totalWantToRead = 0;
     let completedSeries = 0;
-    let totalTrackedBooks = 0;
+    let totalMissingCost = 0;
 
     updatedSeriesList.forEach((s) => {
-      totalTrackedBooks += s.totalCount;
-      totalRead += s.readCount;
-      totalMissing += s.missingCount;
       if (s.isCompleted) completedSeries++;
       s.books.forEach((b) => {
-        if (!b.isRead) totalMissingCost += b.price || 14.99;
-        if (b.isWantToRead && !b.isRead) totalWantToRead++;
+        if (b.isRead) totalRead++;
+        else if (b.isWantToRead) totalWantToRead++;
+        else {
+          totalMissing++;
+          totalMissingCost += b.price || 14.99;
+        }
       });
     });
 
     updatedStandalone.forEach((b) => {
       if (b.isRead) totalRead++;
+      else if (b.isWantToRead) totalWantToRead++;
+      else totalMissing++;
     });
 
     updatedWantToRead.forEach((b) => {
-      if (!b.isRead) totalWantToRead++;
+      if (b.isRead) totalRead++;
+      else totalWantToRead++;
     });
 
-    const completionRate = totalTrackedBooks > 0 ? Math.round((totalRead / totalTrackedBooks) * 100) : 100;
+    const totalSeries = updatedSeriesList.length;
+    const completionRate = totalSeries > 0 ? Math.round((completedSeries / totalSeries) * 100) : 0;
 
     const newStats = {
       totalRead,
       totalWantToRead,
       totalMissing,
-      totalSeries: updatedSeriesList.length,
+      totalSeries,
       completedSeries,
       completionRate,
-      totalMissingCost: Math.round(totalMissingCost * 100) / 100,
+      totalMissingCost: Math.round(totalMissingCost),
     };
 
     setSeriesList(updatedSeriesList);
     setStandaloneBooks(updatedStandalone);
     setWantToReadStandalone(updatedWantToRead);
     setStats(newStats);
-    persistState(updatedSeriesList, updatedStandalone, updatedWantToRead, newStats);
+    persistState(updatedSeriesList, updatedStandalone, updatedWantToRead, newStats, userName);
 
     if (selectedBook && matchesBook(selectedBook)) {
       setSelectedBook({
@@ -341,14 +355,13 @@ export default function App() {
     }
   };
 
-  const handleImportCSV = async (parsedBooks, name = '') => {
-    setIsLoading(true);
-    setLoadingBookCount(parsedBooks ? parsedBooks.length : 0);
-    soundFX.playPageFlip();
-
+  const handleImportCSV = async (parsedBooks, name) => {
     try {
+      setIsLoading(true);
+      setLoadingBookCount(parsedBooks.length);
+      soundFX.playClick();
+
       const apiSettings = getStoredApiKeys();
-      // Near-instant synchronous resolution (< 30ms for 1,000+ books)
       const resolved = await resolveLibrarySeries(parsedBooks, apiSettings);
       const newName = name || userName;
 
@@ -372,7 +385,6 @@ export default function App() {
         });
       }, 450);
 
-      // Non-blocking background worker to enrich covers for books that had no ISBN
       const allBooks = [];
       resolved.seriesList.forEach((s) => allBooks.push(...s.books));
       allBooks.push(...resolved.standaloneBooks, ...(resolved.wantToReadStandalone || []));
@@ -425,11 +437,6 @@ export default function App() {
     await handleImportCSV(parsed, name);
   };
 
-  const handleToggleSound = () => {
-    const next = soundFX.toggleSound();
-    setSoundEnabled(next);
-  };
-
   const handleHoverStart = useCallback((book, rect) => {
     setActiveHover({ book, rect });
   }, []);
@@ -440,35 +447,22 @@ export default function App() {
 
   const hasData = seriesList.length > 0 || standaloneBooks.length > 0 || wantToReadStandalone.length > 0;
 
-  // Compute compact multi-series packed shelves
-  const shelfCapacity = bookSize === 'compact' ? 15 : 12;
+  // Compute compact multi-series packed shelves with safe capacity limits
+  const shelfCapacity = bookSize === 'compact' ? 13 : 10;
   const packedShelves = useMemo(() => {
     return packBookshelf(seriesList, standaloneBooks, wantToReadStandalone, shelfCapacity);
   }, [seriesList, standaloneBooks, wantToReadStandalone, shelfCapacity]);
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans selection:bg-[#0071e3] selection:text-white relative overflow-x-hidden wall-${timeOfDay}`}>
-      {/* Dynamic Window Sunlight & Shadow Projector from Right */}
-      <div className={`fixed inset-0 pointer-events-none z-0 window-sunlight-${timeOfDay} transition-opacity duration-700`} />
-
-      {/* Diagonal Architectural Window Pane Shadows from Right */}
-      <div
-        className="fixed inset-0 pointer-events-none z-0 opacity-20 transition-opacity duration-700"
-        style={{
-          background: 'linear-gradient(220deg, rgba(0,0,0,0.18) 0%, transparent 40%, rgba(0,0,0,0.08) 50%, transparent 70%)',
-        }}
-      />
-
+    <div className="min-h-screen flex flex-col font-sans selection:bg-[#0071e3] selection:text-white relative bg-[#0c0d12] text-neutral-100 overflow-x-hidden">
       {/* Global Fixed Non-Clipping Tooltip */}
-      <GlobalBookTooltip activeHover={activeHover} isNight={isNight} />
+      <GlobalBookTooltip activeHover={activeHover} isNight={true} />
 
-      {/* Navbar with Instant Search & Time Dial */}
+      {/* Navbar with Instant Search */}
       <Navbar
         userName={userName}
         onUpdateUserName={handleUpdateUserName}
         stats={stats}
-        soundEnabled={soundEnabled}
-        onToggleSound={handleToggleSound}
         onOpenImport={() => setIsImportOpen(true)}
         onResetLibrary={handleResetLibrary}
         onOpenOpenLibraryInfo={() => setIsOpenLibraryInfoOpen(true)}
@@ -479,14 +473,10 @@ export default function App() {
         standaloneBooks={standaloneBooks}
         wantToReadStandalone={wantToReadStandalone}
         onSelectBook={(b) => setSelectedBook(b)}
-        timeOfDay={timeOfDay}
-        onChangeTimeOfDay={handleTimeOfDayChange}
-        lampOn={lampOn}
-        onToggleLamp={() => setLampOn(!lampOn)}
       />
 
-      {/* Main Bedroom Shelf Stack */}
-      <main className="flex-1 w-full pt-6 pb-20 relative z-10">
+      {/* Main Bookshelf Area */}
+      <main className="flex-1 w-full pt-4 pb-16 relative z-10">
         {/* Animated Sorting Loader */}
         {isLoading && (
           <SortingBooksLoader totalBooks={loadingBookCount} />
@@ -497,31 +487,22 @@ export default function App() {
           <EmptyState
             onImportCSV={handleImportCSV}
             onLoadDemo={handleLoadDemo}
-            isNight={isNight}
           />
         )}
 
-        {/* Real Built-In Shelf Stack Unit on Bedroom Wall */}
+        {/* Architectural Built-In Bookshelf Stack */}
         {!isLoading && hasData && (
-          <div className="w-full max-w-[1550px] mx-auto px-2 sm:px-6 relative flex gap-4 sm:gap-6 items-start">
-            {/* The Shelf Stack Frame */}
-            <div className="flex-1 relative">
-              {/* Left Vertical Bookcase Frame Upright */}
-              <div className={`absolute -left-2 sm:-left-3 top-0 bottom-0 w-3 sm:w-4 rounded-sm border-r transition-colors duration-500 z-10 pointer-events-none ${
-                isNight
-                  ? 'bg-gradient-to-r from-[#171922] to-[#252834] border-white/10 shadow-lg'
-                  : 'bg-gradient-to-r from-[#ebe8df] to-[#ffffff] border-black/10 shadow-sm'
-              }`} />
+          <div className="w-full max-w-[1260px] mx-auto px-3 sm:px-6 relative">
+            {/* Shelf Stack Unit Frame */}
+            <div className="relative">
+              {/* Left Upright Frame Rail */}
+              <div className="absolute -left-2 sm:-left-3 top-0 bottom-0 w-2.5 sm:w-3.5 rounded-sm bg-gradient-to-r from-[#14151b] to-[#22242e] border-r border-white/10 shadow-lg z-10 pointer-events-none" />
 
-              {/* Right Vertical Bookcase Frame Upright */}
-              <div className={`absolute -right-2 sm:-right-3 top-0 bottom-0 w-3 sm:w-4 rounded-sm border-l transition-colors duration-500 z-10 pointer-events-none ${
-                isNight
-                  ? 'bg-gradient-to-l from-[#171922] to-[#252834] border-white/10 shadow-lg'
-                  : 'bg-gradient-to-l from-[#ebe8df] to-[#ffffff] border-black/10 shadow-sm'
-              }`} />
+              {/* Right Upright Frame Rail */}
+              <div className="absolute -right-2 sm:-right-3 top-0 bottom-0 w-2.5 sm:w-3.5 rounded-sm bg-gradient-to-l from-[#14151b] to-[#22242e] border-l border-white/10 shadow-lg z-10 pointer-events-none" />
 
               {/* Continuous Shelves Stack */}
-              <div className="w-full space-y-2 sm:space-y-3">
+              <div className="w-full">
                 {packedShelves.map((shelfItems, shelfIndex) => (
                   <WallShelf
                     key={`shelf-${shelfIndex}`}
@@ -531,30 +512,21 @@ export default function App() {
                     onToggleRead={handleToggleRead}
                     onHoverStart={handleHoverStart}
                     onHoverEnd={handleHoverEnd}
-                    isNight={isNight}
                   />
                 ))}
               </div>
-            </div>
-
-            {/* Standing Designer Reading Lamp Beside the Shelves on the Right */}
-            <div className="hidden md:flex flex-col items-center pt-8 sticky top-24 select-none">
-              <ReadingLamp
-                isOn={lampOn}
-                onToggle={() => setLampOn(!lampOn)}
-                isNight={isNight}
-              />
             </div>
           </div>
         )}
       </main>
 
-      {/* Bedroom Hardwood Baseboard Trim at Bottom */}
-      <div className={`w-full h-7 border-t transition-colors duration-500 mt-auto relative z-10 ${
-        isNight
-          ? 'bg-gradient-to-t from-[#090b10] to-[#12141c] border-white/10'
-          : 'bg-gradient-to-t from-[#dedad0] to-[#ece8de] border-black/[0.08] shadow-inner'
-      }`} />
+      {/* Clean Dark Footer */}
+      <footer className="w-full py-6 text-center text-xs text-neutral-500 border-t border-white/[0.06] mt-auto relative z-10 select-none">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>{userName ? `${userName}'s Library` : 'Bookshelf'} • {stats.totalRead} Books Read</span>
+          <span className="text-[11px] text-neutral-600">Built for avid readers & collectors</span>
+        </div>
+      </footer>
 
       {/* Modals */}
       {selectedBook && (
