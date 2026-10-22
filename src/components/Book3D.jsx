@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { ShoppingCart, Check, Lock, Star, ChevronRight, ExternalLink } from 'lucide-react';
+import { ShoppingCart, Check, Lock, Star, ChevronRight, Bookmark } from 'lucide-react';
 
 export default function Book3D({ book, onInspect, onToggleRead }) {
   const [imgError, setImgError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
   const isRead = book.isRead;
+  const isWantToRead = book.isWantToRead;
   const hasCover = book.coverUrl && !imgError;
 
   return (
@@ -68,14 +69,18 @@ export default function Book3D({ book, onInspect, onToggleRead }) {
           {/* Diagonal Cover Sheen / Light Reflection */}
           <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/8 to-transparent pointer-events-none z-10" />
 
-          {/* Missing Tome Grey Padlock Seal */}
+          {/* Missing or Want-to-Read Overlay Badge on Shelf */}
           {!isRead && (
             <div className="absolute inset-0 bg-black/20 flex flex-col items-center justify-center p-2 pointer-events-none z-20">
               <div className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center text-white/90 shadow-md">
-                <Lock className="w-4 h-4" />
+                {isWantToRead ? (
+                  <Bookmark className="w-4 h-4 text-[#0071e3]" />
+                ) : (
+                  <Lock className="w-4 h-4" />
+                )}
               </div>
-              <span className="text-[10px] font-medium text-white/90 mt-1 drop-shadow bg-black/40 px-2 py-0.5 rounded-full">
-                Missing
+              <span className="text-[9px] font-medium text-white/90 mt-1 drop-shadow bg-black/40 px-2 py-0.5 rounded-full">
+                {isWantToRead ? 'Want to Read' : 'Missing'}
               </span>
             </div>
           )}
@@ -90,7 +95,7 @@ export default function Book3D({ book, onInspect, onToggleRead }) {
           )}
         </div>
 
-        {/* Contact Shadow Underneath Book (Where it rests on the shelf) */}
+        {/* Contact Shadow Underneath Book */}
         <div className="absolute -bottom-2 inset-x-2 h-2.5 bg-black/40 blur-[3px] rounded-full pointer-events-none" />
       </div>
 
@@ -103,7 +108,7 @@ export default function Book3D({ book, onInspect, onToggleRead }) {
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Tooltip Arrow pointing down to book */}
+        {/* Tooltip Arrow */}
         <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white/95 border-r border-b border-black/[0.08] rotate-45" />
 
         {/* Header / Series Order */}
@@ -115,6 +120,11 @@ export default function Book3D({ book, onInspect, onToggleRead }) {
             <span className="flex items-center gap-1 text-[#34c759] font-semibold bg-[#34c759]/10 px-2 py-0.5 rounded-full">
               <Check className="w-3 h-3 stroke-[3]" />
               <span>Read</span>
+            </span>
+          ) : isWantToRead ? (
+            <span className="flex items-center gap-1 text-[#0071e3] font-medium bg-[#0071e3]/10 px-2 py-0.5 rounded-full">
+              <Bookmark className="w-3 h-3" />
+              <span>Want to Read</span>
             </span>
           ) : (
             <span className="flex items-center gap-1 text-[#86868b] font-medium bg-[#f5f5f7] px-2 py-0.5 rounded-full">
@@ -144,7 +154,7 @@ export default function Book3D({ book, onInspect, onToggleRead }) {
               >
                 <span className="flex items-center gap-1.5">
                   <ShoppingCart className="w-3.5 h-3.5" />
-                  <span>Buy (~${book.price ? book.price.toFixed(2) : '14.99'})</span>
+                  <span>Buy Book</span>
                 </span>
                 <ChevronRight className="w-3.5 h-3.5 opacity-70" />
               </a>

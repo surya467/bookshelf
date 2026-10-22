@@ -17,15 +17,17 @@ const DEMO_SAMPLE_CSV = `Book Id,Title,Author,Author l-f,Additional Authors,ISBN
 239754337,"Harry Potter and the Chamber of Secrets (Harry Potter, #2)",J.K. Rowling,"Rowling, J.K.","Hugh Laurie, Matthew MacFadyen, Kit Harington, Riz Ahmed, Michelle Gomez, Daniel Mays, Mark Addy, Simon Pegg, Cush Jumbo, Alex Hassell, Gemma Whelan, Indira Varma, Frankie Treadaway, Max Lester, Arabella Stanton","=""""","=""""",5.0,Pottermore Publishing and Audible Studios,Audiobook,10,2025,1998,,2026/09/30,,,read,,,,1,0
 5,"Harry Potter and the Prisoner of Azkaban (Harry Potter, #3)",J.K. Rowling,"Rowling, J.K.",Mary GrandPrAc,"=""043965548X""","=""9780439655484""",5.0,Scholastic Inc.,Mass Market Paperback,547,2004,1999,,2026/09/30,,,read,,,,1,0`;
 
-const STORAGE_KEY_DATA = 'bookshelf_library_v3';
-const STORAGE_KEY_NAME = 'bookshelf_user_name_v3';
+const STORAGE_KEY_DATA = 'bookshelf_library_v4';
+const STORAGE_KEY_NAME = 'bookshelf_user_name_v4';
 
 export default function App() {
   const [seriesList, setSeriesList] = useState([]);
   const [standaloneBooks, setStandaloneBooks] = useState([]);
+  const [wantToReadStandalone, setWantToReadStandalone] = useState([]);
   const [userName, setUserName] = useState('');
   const [stats, setStats] = useState({
     totalRead: 0,
+    totalWantToRead: 0,
     totalMissing: 0,
     totalSeries: 0,
     completedSeries: 0,
@@ -56,6 +58,7 @@ export default function App() {
         if (parsed.seriesList && parsed.seriesList.length > 0) {
           setSeriesList(parsed.seriesList);
           setStandaloneBooks(parsed.standaloneBooks || []);
+          setWantToReadStandalone(parsed.wantToReadStandalone || []);
           setStats(parsed.stats || {});
         }
       }
@@ -64,13 +67,14 @@ export default function App() {
     }
   }, []);
 
-  const persistState = (newSeriesList, newStandalone, newStats, newName = userName) => {
+  const persistState = (newSeriesList, newStandalone, newWantToRead, newStats, newName = userName) => {
     try {
       localStorage.setItem(
         STORAGE_KEY_DATA,
         JSON.stringify({
           seriesList: newSeriesList,
           standaloneBooks: newStandalone,
+          wantToReadStandalone: newWantToRead,
           stats: newStats,
         })
       );
@@ -108,6 +112,7 @@ export default function App() {
             ...b,
             isRead: willBeRead,
             isGreyedOut: !willBeRead,
+            isWantToRead: willBeRead ? false : b.isWantToRead,
           };
         }
         return b;
@@ -151,7 +156,19 @@ export default function App() {
       return b;
     });
 
+    let updatedWantToRead = wantToReadStandalone.map((b) => {
+      if (b.id === targetBook.id) {
+        return {
+          ...b,
+          isRead: willBeRead,
+          isGreyedOut: !willBeRead,
+        };
+      }
+      return b;
+    });
+
     let totalRead = 0;
+    let totalWantToRead = 0;
     let totalMissing = 0;
     let totalMissingCost = 0;
     let completedSeries = 0;
@@ -164,6 +181,7 @@ export default function App() {
       if (s.isCompleted) completedSeries++;
       s.books.forEach((b) => {
         if (!b.isRead) totalMissingCost += b.price || 14.99;
+        if (b.isWantToRead && !b.isRead) totalWantToRead++;
       });
     });
 
@@ -171,10 +189,15 @@ export default function App() {
       if (b.isRead) totalRead++;
     });
 
+    updatedWantToRead.forEach((b) => {
+      if (!b.isRead) totalWantToRead++;
+    });
+
     const completionRate = totalTrackedBooks > 0 ? Math.round((totalRead / totalTrackedBooks) * 100) : 100;
 
     const newStats = {
       totalRead,
+      totalWantToRead,
       totalMissing,
       totalSeries: updatedSeriesList.length,
       completedSeries,
@@ -184,8 +207,9 @@ export default function App() {
 
     setSeriesList(updatedSeriesList);
     setStandaloneBooks(updatedStandalone);
+    setWantToReadStandalone(updatedWantToRead);
     setStats(newStats);
-    persistState(updatedSeriesList, updatedStandalone, newStats);
+    persistState(updatedSeriesList, updatedStandalone, updatedWantToRead, newStats);
 
     if (selectedBook && selectedBook.id === targetBook.id) {
       setSelectedBook({
@@ -205,12 +229,13 @@ export default function App() {
 
       setSeriesList(resolved.seriesList);
       setStandaloneBooks(resolved.standaloneBooks);
+      setWantToReadStandalone(resolved.wantToReadStandalone || []);
       setStats(resolved.stats);
       if (newName) {
         setUserName(newName);
       }
 
-      persistState(resolved.seriesList, resolved.standaloneBooks, resolved.stats, newName);
+      persistState(resolved.seriesList, resolved.standaloneBooks, resolved.wantToReadStandalone || [], resolved.stats, newName);
 
       confetti({
         particleCount: 60,
@@ -229,8 +254,10 @@ export default function App() {
     localStorage.removeItem(STORAGE_KEY_DATA);
     setSeriesList([]);
     setStandaloneBooks([]);
+    setWantToReadStandalone([]);
     setStats({
       totalRead: 0,
+      totalWantToRead: 0,
       totalMissing: 0,
       totalSeries: 0,
       completedSeries: 0,
@@ -242,7 +269,7 @@ export default function App() {
   const handleUpdateUserName = (newName) => {
     setUserName(newName);
     localStorage.setItem(STORAGE_KEY_NAME, newName);
-    persistState(seriesList, standaloneBooks, stats, newName);
+    persistState(seriesList, standaloneBooks, wantToReadStandalone, stats, newName);
   };
 
   const handleLoadDemo = async (name = 'Surya') => {
@@ -261,7 +288,7 @@ export default function App() {
     setSoundEnabled(next);
   };
 
-  const hasData = seriesList.length > 0 || standaloneBooks.length > 0;
+  const hasData = seriesList.length > 0 || standaloneBooks.length > 0 || wantToReadStandalone.length > 0;
 
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-[#0071e3] selection:text-white relative">
@@ -285,7 +312,7 @@ export default function App() {
           <div className="flex flex-col items-center justify-center py-28 text-center">
             <div className="w-10 h-10 border-2 border-black/[0.1] border-t-[#0071e3] rounded-full animate-spin mb-4" />
             <h3 className="text-sm font-semibold text-[#1d1d1f]">Mounting Books on Wall...</h3>
-            <p className="text-xs text-[#86868b] mt-1">Generating 3D volumes & covers</p>
+            <p className="text-xs text-[#86868b] mt-1">Resolving series & shelves</p>
           </div>
         )}
 
@@ -300,6 +327,7 @@ export default function App() {
         {/* The Wall with Floating Picture-Ledge Shelves */}
         {!isLoading && hasData && (
           <div className="w-full space-y-4">
+            {/* Series Shelves */}
             {seriesList.map((series) => (
               <WallShelf
                 key={series.id}
@@ -309,7 +337,17 @@ export default function App() {
               />
             ))}
 
-            {/* Standalone Works Shelf */}
+            {/* Standalone Want-to-Read Shelf */}
+            {wantToReadStandalone && wantToReadStandalone.length > 0 && (
+              <WallShelf
+                isWantToReadShelf={true}
+                wantToReadBooks={wantToReadStandalone}
+                onInspectBook={(book) => setSelectedBook(book)}
+                onToggleRead={handleToggleRead}
+              />
+            )}
+
+            {/* Standalone Completed Works Shelf */}
             {standaloneBooks && standaloneBooks.length > 0 && (
               <WallShelf
                 isStandalone={true}

@@ -1,8 +1,8 @@
 // Series Resolver & Missing Book Generator
-// Combines parsed Goodreads data with Curated Series and Open Library APIs
+// Combines parsed Goodreads data with Curated Series and strict author-verified series logic
 
 import { findCuratedSeries } from './seriesDatabase.js';
-import { getOpenLibraryCoverUrl, getPurchaseLinks, searchSeriesBooks, searchOpenLibraryBooks } from './openLibrary.js';
+import { getOpenLibraryCoverUrl, getPurchaseLinks } from './openLibrary.js';
 
 /**
  * Normalizes title strings for fuzzy matching
@@ -17,20 +17,65 @@ function cleanForMatch(str) {
 }
 
 /**
+ * Checks if two author strings refer to the same author.
+ * Strictly prevents adding books by unrelated authors or institutions.
+ */
+export function isSameAuthor(authorA, authorB) {
+  if (!authorA || !authorB) return false;
+  const cleanA = authorA.toLowerCase().replace(/[^a-z]/g, ' ').trim().split(/\s+/).filter((w) => w.length > 1);
+  const cleanB = authorB.toLowerCase().replace(/[^a-z]/g, ' ').trim().split(/\s+/).filter((w) => w.length > 1);
+  if (cleanA.length === 0 || cleanB.length === 0) return false;
+
+  const lastA = cleanA[cleanA.length - 1];
+  const lastB = cleanB[cleanB.length - 1];
+  if (lastA && lastB && lastA === lastB && lastA.length >= 3) return true;
+
+  return cleanA.some((w) => w.length >= 4 && cleanB.includes(w));
+}
+
+/**
+ * Filters out omnibuses, companion magazines, box sets, or duplicate compilations.
+ */
+function isJunkOrCompilation(title) {
+  if (!title) return true;
+  const lower = title.toLowerCase();
+  const junkWords = [
+    'omnibus',
+    'boxed set',
+    'box set',
+    'series 1-',
+    'collection',
+    'magazine',
+    'periodical',
+    'film',
+    'institute',
+    'journal',
+    'study guide',
+    'summary of',
+    'analysis of',
+    'trivia',
+    'anthology',
+  ];
+  return junkWords.some((word) => lower.includes(word));
+}
+
+/**
  * Resolves all books from a Goodreads export into:
- * 1. Series groups with read (color) and missing (greyed-out) tomes.
+ * 1. Series groups with read (color), want-to-read (greyed-out on same shelf), and missing tomes.
  * 2. Standalone read tomes.
+ * 3. Standalone want-to-read tomes.
  *
- * STRICT RULE: Only books the user has read AND the unread books in their specific series are included.
- * Never includes arbitrary books from unrelated series!
+ * STRICT RULE: Keep it to the series only! Never add random unrelated books.
  */
 export async function resolveLibrarySeries(parsedBooks) {
   if (!parsedBooks || parsedBooks.length === 0) {
     return {
       seriesList: [],
       standaloneBooks: [],
+      wantToReadStandalone: [],
       stats: {
         totalRead: 0,
+        totalWantToRead: 0,
         totalMissing: 0,
         totalSeries: 0,
         completedSeries: 0,
@@ -40,73 +85,80 @@ export async function resolveLibrarySeries(parsedBooks) {
     };
   }
 
-  // Filter for books the user has read (or user added to library)
-  const readBooks = parsedBooks.filter((b) => b.isRead || b.shelf === 'read');
-
-  // Map of series name / key -> array of read books belonging to it
+  // Buckets for grouping series
   const seriesBuckets = new Map();
   const standaloneBooks = [];
+  const wantToReadStandalone = [];
 
-  for (const book of readBooks) {
+  for (const book of parsedBooks) {
     const curated = findCuratedSeries(book.seriesName, book.author, book.title);
 
     if (curated) {
       const key = curated.name.toLowerCase();
       if (!seriesBuckets.has(key)) {
-        seriesBuckets.set(key, { curated, readBooks: [] });
+        seriesBuckets.set(key, { curated, userBooks: [] });
       }
-      seriesBuckets.get(key).readBooks.push(book);
+      seriesBuckets.get(key).userBooks.push(book);
     } else if (book.seriesName) {
-      // Custom series not in curated list
+      // Non-curated series detected from Goodreads title
       const key = book.seriesName.toLowerCase();
       if (!seriesBuckets.has(key)) {
-        seriesBuckets.set(key, { customName: book.seriesName, author: book.author, readBooks: [] });
+        seriesBuckets.set(key, { customName: book.seriesName, author: book.author, userBooks: [] });
       }
-      seriesBuckets.get(key).readBooks.push(book);
+      seriesBuckets.get(key).userBooks.push(book);
     } else {
-      // Standalone book
-      // Ensure it has a coverUrl
+      // Standalone book (no series detected)
       const cleanIsbn = book.isbn13 || book.isbn;
       let coverUrl = cleanIsbn ? getOpenLibraryCoverUrl(cleanIsbn, 'isbn', 'L') : null;
-      standaloneBooks.push({
+
+      const formatted = {
         ...book,
         coverUrl,
-        isRead: true,
-        isGreyedOut: false,
+        isRead: book.isRead,
+        isGreyedOut: !book.isRead,
+        isWantToRead: !!book.isWantToRead,
         purchaseLinks: getPurchaseLinks(book.title, book.author, cleanIsbn),
         price: 14.99,
-      });
+      };
+
+      if (book.isRead) {
+        standaloneBooks.push(formatted);
+      } else if (book.isWantToRead) {
+        wantToReadStandalone.push(formatted);
+      }
     }
   }
 
   const seriesList = [];
+  let totalReadCount = 0;
+  let totalWantToReadCount = 0;
   let totalMissingCount = 0;
   let totalMissingCost = 0;
 
   // Process each series bucket
   for (const [key, bucket] of seriesBuckets.entries()) {
     if (bucket.curated) {
+      // --- Case 1: Curated Iconic Series (Verified 100% accurate sequence) ---
       const curated = bucket.curated;
       const allSeriesBooks = [];
-      const userReadMap = new Map();
+      const userBookMap = new Map();
 
-      // Index user's read books by order or cleaned title
-      for (const rb of bucket.readBooks) {
-        if (rb.seriesNumber !== null && rb.seriesNumber !== undefined) {
-          userReadMap.set(`order-${rb.seriesNumber}`, rb);
+      for (const ub of bucket.userBooks) {
+        if (ub.seriesNumber !== null && ub.seriesNumber !== undefined) {
+          userBookMap.set(`order-${ub.seriesNumber}`, ub);
         }
-        userReadMap.set(cleanForMatch(rb.title), rb);
+        userBookMap.set(cleanForMatch(ub.title), ub);
       }
 
       for (const canonBook of curated.books) {
-        // Check if user read this book
-        const userRead =
-          userReadMap.get(`order-${canonBook.order}`) ||
-          userReadMap.get(cleanForMatch(canonBook.title)) ||
-          (canonBook.altTitle && userReadMap.get(cleanForMatch(canonBook.altTitle)));
+        const userBook =
+          userBookMap.get(`order-${canonBook.order}`) ||
+          userBookMap.get(cleanForMatch(canonBook.title)) ||
+          (canonBook.altTitle && userBookMap.get(cleanForMatch(canonBook.altTitle)));
 
-        const isRead = !!userRead;
-        const isbn = (userRead && (userRead.isbn13 || userRead.isbn)) || canonBook.isbn13;
+        const isRead = !!userBook && !!userBook.isRead;
+        const isWantToRead = !!userBook && !!userBook.isWantToRead;
+        const isbn = (userBook && (userBook.isbn13 || userBook.isbn)) || canonBook.isbn13;
         const coverUrl = canonBook.coverId
           ? getOpenLibraryCoverUrl(canonBook.coverId, 'id', 'L')
           : isbn
@@ -115,13 +167,19 @@ export async function resolveLibrarySeries(parsedBooks) {
 
         const price = 14.99 + (canonBook.order % 3) * 2.0;
 
-        if (!isRead) {
+        if (isRead) {
+          totalReadCount++;
+        } else if (isWantToRead) {
+          totalWantToReadCount++;
+          totalMissingCount++;
+          totalMissingCost += price;
+        } else {
           totalMissingCount++;
           totalMissingCost += price;
         }
 
         allSeriesBooks.push({
-          id: userRead ? userRead.id : `missing-${curated.name}-${canonBook.order}`,
+          id: userBook ? userBook.id : `missing-${curated.name}-${canonBook.order}`,
           title: canonBook.title,
           author: curated.author,
           order: canonBook.order,
@@ -130,38 +188,42 @@ export async function resolveLibrarySeries(parsedBooks) {
           year: canonBook.year,
           pages: canonBook.pages,
           description: canonBook.description,
-          isbn: isbn,
+          isbn,
           isbn13: canonBook.isbn13,
           coverUrl,
           coverId: canonBook.coverId,
           isRead,
           isGreyedOut: !isRead,
-          rating: userRead ? userRead.rating : 0,
-          dateRead: userRead ? userRead.dateRead : null,
+          isWantToRead,
+          rating: userBook ? userBook.rating : 0,
+          dateRead: userBook ? userBook.dateRead : null,
           price,
           purchaseLinks: getPurchaseLinks(canonBook.title, curated.author, isbn),
         });
       }
 
-      // Check for any extra user read books that might be companions (like piano score or novella)
-      for (const rb of bucket.readBooks) {
-        const isMatched = allSeriesBooks.some((b) => b.isRead && (b.id === rb.id || cleanForMatch(b.title) === cleanForMatch(rb.title)));
+      // Add any extra user read/want-to-read companion books (e.g. musical score)
+      for (const ub of bucket.userBooks) {
+        const isMatched = allSeriesBooks.some((b) => b.id === ub.id || cleanForMatch(b.title) === cleanForMatch(ub.title));
         if (!isMatched) {
-          const cleanIsbn = rb.isbn13 || rb.isbn;
+          const cleanIsbn = ub.isbn13 || ub.isbn;
+          if (ub.isRead) totalReadCount++;
+          if (ub.isWantToRead) totalWantToReadCount++;
+
           allSeriesBooks.push({
-            ...rb,
-            order: rb.seriesNumber || 99,
+            ...ub,
+            order: ub.seriesNumber || 99,
             seriesName: curated.name,
-            isRead: true,
-            isGreyedOut: false,
+            isRead: ub.isRead,
+            isGreyedOut: !ub.isRead,
+            isWantToRead: !!ub.isWantToRead,
             coverUrl: cleanIsbn ? getOpenLibraryCoverUrl(cleanIsbn, 'isbn', 'L') : null,
-            purchaseLinks: getPurchaseLinks(rb.title, rb.author, cleanIsbn),
+            purchaseLinks: getPurchaseLinks(ub.title, ub.author, cleanIsbn),
             price: 15.99,
           });
         }
       }
 
-      // Sort books by sequence order
       allSeriesBooks.sort((a, b) => a.order - b.order);
 
       const readCount = allSeriesBooks.filter((b) => b.isRead).length;
@@ -181,70 +243,61 @@ export async function resolveLibrarySeries(parsedBooks) {
         isCompleted: readCount === totalCount,
       });
     } else {
-      // Dynamic resolution for non-curated series using Open Library
+      // --- Case 2: Custom / Non-Curated Series (from user's CSV) ---
       const customName = bucket.customName;
       const author = bucket.author;
-      const readList = bucket.readBooks;
+      const userList = bucket.userBooks;
 
-      // Create entries for read books
-      const seriesBooks = readList.map((rb) => {
-        const cleanIsbn = rb.isbn13 || rb.isbn;
+      // Group all books the user has for this series (both read and want-to-read!)
+      const seriesBooks = userList.map((ub) => {
+        const cleanIsbn = ub.isbn13 || ub.isbn;
+        const isRead = !!ub.isRead;
+        const isWantToRead = !!ub.isWantToRead;
+
+        if (isRead) {
+          totalReadCount++;
+        } else {
+          totalMissingCount++;
+          totalMissingCost += 14.99;
+          if (isWantToRead) totalWantToReadCount++;
+        }
+
         return {
-          ...rb,
-          order: rb.seriesNumber || 1,
+          ...ub,
+          order: ub.seriesNumber || 1,
           seriesName: customName,
-          isRead: true,
-          isGreyedOut: false,
+          isRead,
+          isGreyedOut: !isRead,
+          isWantToRead,
           coverUrl: cleanIsbn ? getOpenLibraryCoverUrl(cleanIsbn, 'isbn', 'L') : null,
-          purchaseLinks: getPurchaseLinks(rb.title, rb.author, cleanIsbn),
-          price: 15.99,
+          purchaseLinks: getPurchaseLinks(ub.title, ub.author, cleanIsbn),
+          price: 14.99,
         };
       });
 
-      // Try discovering missing books from Open Library
-      try {
-        const discovered = await searchSeriesBooks(customName, author, 12);
-        for (const disc of discovered) {
-          const alreadyExists = seriesBooks.some((b) => cleanForMatch(b.title) === cleanForMatch(disc.title));
-          if (!alreadyExists && seriesBooks.length < 15) {
-            totalMissingCount++;
-            totalMissingCost += 16.99;
-            seriesBooks.push({
-              id: `missing-${customName}-${disc.title}`,
-              title: disc.title,
-              author: disc.author || author,
-              order: seriesBooks.length + 1,
-              seriesName: customName,
-              seriesNumber: seriesBooks.length + 1,
-              year: disc.year,
-              coverUrl: disc.coverUrl,
-              coverId: disc.coverId,
-              isbn: disc.isbn,
-              isRead: false,
-              isGreyedOut: true,
-              rating: 0,
-              dateRead: null,
-              price: 16.99,
-              purchaseLinks: getPurchaseLinks(disc.title, disc.author || author, disc.isbn),
-            });
-          }
+      // Deduplicate by clean title so same book isn't shown twice
+      const seenTitles = new Set();
+      const cleanSeriesBooks = [];
+      for (const b of seriesBooks) {
+        const t = cleanForMatch(b.title);
+        if (!seenTitles.has(t)) {
+          seenTitles.add(t);
+          cleanSeriesBooks.push(b);
         }
-      } catch (e) {
-        console.warn('Could not query Open Library for custom series:', e);
       }
 
-      seriesBooks.sort((a, b) => a.order - b.order);
+      cleanSeriesBooks.sort((a, b) => a.order - b.order);
 
-      const readCount = seriesBooks.filter((b) => b.isRead).length;
-      const totalCount = seriesBooks.length;
+      const readCount = cleanSeriesBooks.filter((b) => b.isRead).length;
+      const totalCount = cleanSeriesBooks.length;
       const percent = Math.round((readCount / totalCount) * 100);
 
       seriesList.push({
         id: `series-${key}`,
         name: customName,
         author: author,
-        universe: 'Literary World',
-        books: seriesBooks,
+        universe: 'Series Collection',
+        books: cleanSeriesBooks,
         readCount,
         totalCount,
         missingCount: totalCount - readCount,
@@ -254,29 +307,27 @@ export async function resolveLibrarySeries(parsedBooks) {
     }
   }
 
-  // Sort series: In-progress series first, then completed
-  seriesList.sort((a, b) => {
-    if (a.isCompleted !== b.isCompleted) {
-      return a.isCompleted ? 1 : -1;
-    }
-    return b.completionPercent - a.completionPercent;
+  // Count standalone read
+  standaloneBooks.forEach((b) => {
+    if (b.isRead) totalReadCount++;
+  });
+  wantToReadStandalone.forEach(() => {
+    totalWantToReadCount++;
   });
 
-  const totalReadCount = readBooks.length;
-  const completedSeriesCount = seriesList.filter((s) => s.isCompleted).length;
-  const totalBooksInTrackedSeries = seriesList.reduce((acc, s) => acc + s.totalCount, 0);
-  const overallRate = totalBooksInTrackedSeries > 0 
-    ? Math.round((readBooks.length / totalBooksInTrackedSeries) * 100) 
-    : 100;
+  const totalTrackedBooks = seriesList.reduce((acc, s) => acc + s.totalCount, 0);
+  const overallRate = totalTrackedBooks > 0 ? Math.round((totalReadCount / totalTrackedBooks) * 100) : 100;
 
   return {
     seriesList,
     standaloneBooks,
+    wantToReadStandalone,
     stats: {
       totalRead: totalReadCount,
+      totalWantToRead: totalWantToReadCount,
       totalMissing: totalMissingCount,
       totalSeries: seriesList.length,
-      completedSeries: completedSeriesCount,
+      completedSeries: seriesList.filter((s) => s.isCompleted).length,
       completionRate: overallRate,
       totalMissingCost: Math.round(totalMissingCost * 100) / 100,
     },

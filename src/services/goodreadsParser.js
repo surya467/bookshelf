@@ -1,4 +1,4 @@
-// Enhanced Goodreads CSV Parser with Series Detection and Formula Unescaping
+// Enhanced Goodreads CSV Parser with Series Detection, Formula Unescaping, and Want-to-Read support
 
 /**
  * Parses CSV text into rows, accurately respecting quotes, escaped quotes (""), and multiline fields.
@@ -16,7 +16,7 @@ function parseCSVRows(csvText) {
     if (char === '"') {
       if (insideQuotes && nextChar === '"') {
         currentField += '"';
-        i++; // skip escaped quote
+        i++;
       } else {
         insideQuotes = !insideQuotes;
       }
@@ -25,7 +25,7 @@ function parseCSVRows(csvText) {
       currentField = '';
     } else if ((char === '\r' || char === '\n') && !insideQuotes) {
       if (char === '\r' && nextChar === '\n') {
-        i++; // handle \r\n
+        i++;
       }
       currentRow.push(currentField);
       if (currentRow.some((f) => f.trim() !== '')) {
@@ -54,7 +54,6 @@ function parseCSVRows(csvText) {
 function cleanExcelFormula(val) {
   if (!val) return '';
   let str = String(val).trim();
-  // Strip Excel ="..." or =""
   const match = str.match(/^="*(.*?)"*$/);
   if (match) {
     str = match[1].trim();
@@ -68,7 +67,7 @@ function cleanExcelFormula(val) {
  * - "Harry Potter and the Philosopher's Stone (Harry Potter, #1)"
  * - "Catching Fire (The Hunger Games, #2)"
  * - "The Way of Kings (The Stormlight Archive, #1)"
- * - "Dune (Dune Chronicles #1)"
+ * - "Avatar: The Last Airbender - Imbalance Part 1 (Imbalance, #1)"
  */
 export function extractSeriesFromTitle(rawTitle) {
   if (!rawTitle) return { cleanTitle: '', seriesName: null, seriesNumber: null };
@@ -105,6 +104,17 @@ export function extractSeriesFromTitle(rawTitle) {
       cleanTitle: match3[1].trim(),
       seriesName: match3[2].trim(),
       seriesNumber: parseFloat(match3[3]),
+    };
+  }
+
+  // Pattern 4: Title: Part 1 / Part 2 / Book 1
+  const pattern4 = /^(.*?)\s*[:–-]\s*Part\s+(\d+)\b/i;
+  const match4 = trimmed.match(pattern4);
+  if (match4) {
+    return {
+      cleanTitle: trimmed,
+      seriesName: match4[1].trim(),
+      seriesNumber: parseFloat(match4[2]),
     };
   }
 
@@ -155,9 +165,17 @@ export function parseGoodreadsCSV(csvText) {
     const publisher = cleanExcelFormula(getCol(row, 'publisher'));
     const binding = cleanExcelFormula(getCol(row, 'binding')) || 'Paperback';
     const year = parseInt(getCol(row, 'originalpublicationyear', 'yearpublished', 'year'), 10) || 0;
-    const shelf = (getCol(row, 'exclusiveshelf', 'shelf') || 'read').toLowerCase();
+    
+    // Parse shelves accurately
+    const shelf = (cleanExcelFormula(getCol(row, 'exclusiveshelf', 'shelf')) || 'read').toLowerCase();
+    const bookshelves = cleanExcelFormula(getCol(row, 'bookshelves', 'shelves')).toLowerCase();
     const dateRead = cleanExcelFormula(getCol(row, 'dateread'));
     const dateAdded = cleanExcelFormula(getCol(row, 'dateadded'));
+
+    // Detect want-to-read / to-read vs read
+    const isWantToRead = shelf === 'to-read' || bookshelves.includes('to-read') || bookshelves.includes('want-to-read');
+    const isCurrentlyReading = shelf === 'currently-reading' || bookshelves.includes('currently-reading');
+    const isRead = !isWantToRead && (shelf === 'read' || rating > 0 || !!dateRead);
 
     const { cleanTitle, seriesName, seriesNumber } = extractSeriesFromTitle(rawTitle);
 
@@ -179,7 +197,9 @@ export function parseGoodreadsCSV(csvText) {
       dateAdded,
       seriesName,
       seriesNumber,
-      isRead: shelf === 'read' || rating > 0 || !!dateRead,
+      isRead,
+      isWantToRead,
+      isCurrentlyReading,
     });
   }
 
