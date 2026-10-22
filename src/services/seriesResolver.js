@@ -2,7 +2,7 @@
 // Combines parsed Goodreads data with Curated Series and strict author-verified series logic
 
 import { findCuratedSeries } from './seriesDatabase.js';
-import { getOpenLibraryCoverUrl, getPurchaseLinks } from './openLibrary.js';
+import { getOpenLibraryCoverUrl, getPurchaseLinks, resolveBookCover } from './openLibrary.js';
 
 /**
  * Normalizes title strings for fuzzy matching
@@ -14,6 +14,24 @@ function cleanForMatch(str) {
     .replace(/^the\s+/, '')
     .replace(/[^a-z0-9]/g, '')
     .trim();
+}
+
+/**
+ * Helper to get or dynamically resolve cover using multi-provider fallback
+ */
+async function getCoverForBook(book, apiSettings = {}) {
+  const cleanIsbn = book.isbn13 || book.isbn;
+  if (cleanIsbn) {
+    return getOpenLibraryCoverUrl(cleanIsbn, 'isbn', 'L');
+  }
+  return await resolveBookCover({
+    title: book.title,
+    author: book.author,
+    isbn: cleanIsbn,
+    isbn13: book.isbn13,
+    googleApiKey: apiSettings.googleApiKey,
+    hardcoverToken: apiSettings.hardcoverToken,
+  });
 }
 
 /**
@@ -67,7 +85,7 @@ function isJunkOrCompilation(title) {
  *
  * STRICT RULE: Keep it to the series only! Never add random unrelated books.
  */
-export async function resolveLibrarySeries(parsedBooks) {
+export async function resolveLibrarySeries(parsedBooks, apiSettings = {}) {
   if (!parsedBooks || parsedBooks.length === 0) {
     return {
       seriesList: [],
@@ -288,6 +306,13 @@ export async function resolveLibrarySeries(parsedBooks) {
 
       cleanSeriesBooks.sort((a, b) => a.order - b.order);
 
+      // Dynamically resolve covers for books missing ISBN
+      for (const b of cleanSeriesBooks) {
+        if (!b.coverUrl) {
+          b.coverUrl = await getCoverForBook(b, apiSettings);
+        }
+      }
+
       const readCount = cleanSeriesBooks.filter((b) => b.isRead).length;
       const totalCount = cleanSeriesBooks.length;
       const percent = Math.round((readCount / totalCount) * 100);
@@ -304,6 +329,18 @@ export async function resolveLibrarySeries(parsedBooks) {
         completionPercent: percent,
         isCompleted: readCount === totalCount,
       });
+    }
+  }
+
+  // Enrich covers for standalone books missing ISBN
+  for (const b of standaloneBooks) {
+    if (!b.coverUrl) {
+      b.coverUrl = await getCoverForBook(b, apiSettings);
+    }
+  }
+  for (const b of wantToReadStandalone) {
+    if (!b.coverUrl) {
+      b.coverUrl = await getCoverForBook(b, apiSettings);
     }
   }
 

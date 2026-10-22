@@ -97,10 +97,11 @@ export default function Navbar({
 
           <button
             onClick={onOpenOpenLibraryInfo}
-            className="p-2 rounded-full text-[#86868b] hover:text-[#1d1d1f] hover:bg-white/60 transition-all"
-            title="Open Library API"
+            className="flex items-center gap-1.5 text-xs text-[#1d1d1f] bg-white/70 hover:bg-white px-3 py-1.5 rounded-full border border-black/[0.05] transition-all shadow-sm"
+            title="Book & Cover APIs: Open Library, Google Books, Hardcover"
           >
-            <Library className="w-4 h-4" />
+            <Library className="w-3.5 h-3.5 text-[#0071e3]" />
+            <span className="hidden sm:inline font-medium text-[11px]">Book APIs</span>
           </button>
 
           <button

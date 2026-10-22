@@ -20,6 +20,15 @@ const DEMO_SAMPLE_CSV = `Book Id,Title,Author,Author l-f,Additional Authors,ISBN
 const STORAGE_KEY_DATA = 'bookshelf_library_v4';
 const STORAGE_KEY_NAME = 'bookshelf_user_name_v4';
 
+const getStoredApiKeys = () => {
+  try {
+    const raw = localStorage.getItem('bookshelf_api_keys');
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
 export default function App() {
   const [seriesList, setSeriesList] = useState([]);
   const [standaloneBooks, setStandaloneBooks] = useState([]);
@@ -224,7 +233,8 @@ export default function App() {
     setIsLoading(true);
     soundFX.playPageFlip();
     try {
-      const resolved = await resolveLibrarySeries(parsedBooks);
+      const apiSettings = getStoredApiKeys();
+      const resolved = await resolveLibrarySeries(parsedBooks, apiSettings);
       const newName = name || userName;
 
       setSeriesList(resolved.seriesList);
