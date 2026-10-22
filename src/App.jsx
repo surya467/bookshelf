@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
+import { BookOpen, Bookmark } from 'lucide-react';
 import Navbar from './components/Navbar';
 import WallShelf from './components/WallShelf';
 import BookDetailModal from './components/BookDetailModal';
@@ -44,7 +45,7 @@ function cleanForMatch(str) {
  * - Long series that exceed shelf width are gracefully split into sequential shelf rows (e.g. 'Series (cont.)').
  * - Smaller series share shelves, with remaining gaps filled by single/wishlist editions.
  */
-function packBookshelfResponsive(seriesList, standaloneBooks, wantToReadStandalone, containerWidth = 1200, bookSize = 'default') {
+function packBookshelfResponsive(seriesList, standaloneBooks, wantToReadStandalone = [], containerWidth = 1200, bookSize = 'default') {
   const isCompact = bookSize === 'compact';
   const isSmallScreen = containerWidth < 640;
   const isMediumScreen = containerWidth < 768;
@@ -104,7 +105,7 @@ function packBookshelfResponsive(seriesList, standaloneBooks, wantToReadStandalo
   let currentShelfItems = [];
   let currentShelfWidth = 0;
 
-  // Single books pool: both standalone read and standalone want-to-read
+  // Single books pool
   const allSingleBooks = [
     ...(standaloneBooks || []),
     ...(wantToReadStandalone || []),
@@ -117,11 +118,9 @@ function packBookshelfResponsive(seriesList, standaloneBooks, wantToReadStandalo
     const neededW = currentShelfItems.length > 0 ? dividerW + seriesW : seriesW;
 
     if (currentShelfWidth + neededW <= usableW) {
-      // Series fits on current shelf!
       currentShelfItems.push({ type: 'series', data: series });
       currentShelfWidth += neededW;
     } else {
-      // Doesn't fit with previous series. Before wrapping, fill any leftover room with single books!
       const remainingW = usableW - currentShelfWidth;
       const neededForSinglesDivider = currentShelfItems.length > 0 ? dividerW : 0;
       const availForSingles = remainingW - neededForSinglesDivider;
@@ -142,7 +141,6 @@ function packBookshelfResponsive(seriesList, standaloneBooks, wantToReadStandalo
         shelves.push(currentShelfItems);
       }
 
-      // Start new shelf with this series
       currentShelfItems = [{ type: 'series', data: series }];
       currentShelfWidth = seriesW;
     }
@@ -199,6 +197,9 @@ export default function App() {
   const [loadingBookCount, setLoadingBookCount] = useState(0);
   const [bookSize, setBookSize] = useState('default'); // 'compact' | 'default'
 
+  // Tab State: 'library' (My Library) vs 'wantToRead' (Want to Read Shelf)
+  const [activeTab, setActiveTab] = useState('library');
+
   // Dynamic Shelf Container Width via ResizeObserver
   const shelfContainerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(
@@ -243,7 +244,7 @@ export default function App() {
       if (ro) ro.disconnect();
       window.removeEventListener('resize', updateWidth);
     };
-  }, [seriesList.length, standaloneBooks.length]);
+  }, [seriesList.length, standaloneBooks.length, activeTab]);
 
   // Check localStorage on mount
   useEffect(() => {
@@ -527,16 +528,103 @@ export default function App() {
 
   const hasData = seriesList.length > 0 || standaloneBooks.length > 0 || wantToReadStandalone.length > 0;
 
-  // Compute dynamically packed shelves that fit the exact container width without overflow
+  // 1. ACTIVE SERIES: Series where AT LEAST ONE book has been read!
+  // Any "want-to-read" or missing companions stay beside the already read books!
+  const activeSeries = useMemo(() => {
+    return seriesList.filter((s) => s.books.some((b) => b.isRead));
+  }, [seriesList]);
+
+  // 2. UNSTARTED WANT-TO-READ SERIES: 0 books read, but contains want-to-read books!
+  const wantToReadSeries = useMemo(() => {
+    return seriesList
+      .filter((s) => !s.books.some((b) => b.isRead)) // 0 books read in this series
+      .filter((s) => s.books.some((b) => b.isWantToRead));
+  }, [seriesList]);
+
+  // 3. READ STANDALONE BOOKS
+  const readStandalone = useMemo(() => {
+    return standaloneBooks.filter((b) => b.isRead);
+  }, [standaloneBooks]);
+
+  // 4. UNREAD WANT-TO-READ STANDALONE BOOKS
+  const tbrStandalone = useMemo(() => {
+    const fromStandalone = standaloneBooks.filter((b) => !b.isRead && b.isWantToRead);
+    const fromWantToRead = wantToReadStandalone.filter((b) => !b.isRead);
+    const seen = new Set();
+    const result = [];
+    for (const b of [...fromStandalone, ...fromWantToRead]) {
+      const key = b.id || cleanForMatch(b.title);
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(b);
+      }
+    }
+    return result;
+  }, [standaloneBooks, wantToReadStandalone]);
+
+  // Total counts for tab badges
+  const libraryBookCount = useMemo(() => {
+    let count = readStandalone.length;
+    activeSeries.forEach((s) => {
+      count += s.books.length;
+    });
+    return count;
+  }, [activeSeries, readStandalone]);
+
+  const wantToReadBookCount = useMemo(() => {
+    let count = tbrStandalone.length;
+    wantToReadSeries.forEach((s) => {
+      count += s.books.length;
+    });
+    return count;
+  }, [wantToReadSeries, tbrStandalone]);
+
+  // Compute dynamically packed shelves based on active tab
   const packedShelves = useMemo(() => {
-    return packBookshelfResponsive(
-      seriesList,
-      standaloneBooks,
-      wantToReadStandalone,
-      containerWidth,
-      bookSize
+    if (activeTab === 'library') {
+      return packBookshelfResponsive(
+        activeSeries,
+        readStandalone,
+        [],
+        containerWidth,
+        bookSize
+      );
+    } else {
+      return packBookshelfResponsive(
+        wantToReadSeries,
+        tbrStandalone,
+        [],
+        containerWidth,
+        bookSize
+      );
+    }
+  }, [activeTab, activeSeries, readStandalone, wantToReadSeries, tbrStandalone, containerWidth, bookSize]);
+
+  // Seamless Search selection: auto-switches to the appropriate tab if needed
+  const handleSelectBook = (book) => {
+    if (!book) return;
+    setSelectedBook(book);
+
+    const isInActiveSeries = activeSeries.some((s) =>
+      s.books.some((b) => String(b.id) === String(book.id) || cleanForMatch(b.title) === cleanForMatch(book.title))
     );
-  }, [seriesList, standaloneBooks, wantToReadStandalone, containerWidth, bookSize]);
+    const isRead = !!book.isRead;
+
+    if (!isRead && !isInActiveSeries) {
+      setActiveTab('wantToRead');
+    } else {
+      setActiveTab('library');
+    }
+
+    setTimeout(() => {
+      const el = document.getElementById(`book-${book.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('book-search-pulse');
+        setTimeout(() => el.classList.remove('book-search-pulse'), 2200);
+      }
+    }, 180);
+  };
 
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-[#0071e3] selection:text-white relative bg-[#0c0d12] text-neutral-100 overflow-x-hidden">
@@ -557,7 +645,7 @@ export default function App() {
         seriesList={seriesList}
         standaloneBooks={standaloneBooks}
         wantToReadStandalone={wantToReadStandalone}
-        onSelectBook={(b) => setSelectedBook(b)}
+        onSelectBook={handleSelectBook}
       />
 
       {/* Main Bookshelf Area */}
@@ -575,35 +663,113 @@ export default function App() {
           />
         )}
 
-        {/* Architectural Built-In Bookshelf Stack */}
+        {/* Loaded Shelves Area */}
         {!isLoading && hasData && (
-          <div
-            ref={shelfContainerRef}
-            className="w-full max-w-[1260px] mx-auto px-3 sm:px-6 relative"
-          >
-            {/* Shelf Stack Unit Frame */}
-            <div className="relative w-full">
-              {/* Left Upright Frame Rail */}
-              <div className="absolute -left-2 sm:-left-3 top-0 bottom-0 w-2.5 sm:w-3.5 rounded-sm bg-gradient-to-r from-[#14151b] to-[#22242e] border-r border-white/10 shadow-lg z-10 pointer-events-none" />
+          <div className="w-full">
+            {/* Elegant Tab Switcher: My Library vs Want to Read */}
+            <div className="flex items-center justify-between flex-wrap gap-3 max-w-[1260px] mx-auto px-3 sm:px-6 mb-5 select-none">
+              <div className="inline-flex items-center p-1 rounded-full bg-white/[0.05] border border-white/10 backdrop-blur-xl shadow-lg">
+                <button
+                  onClick={() => {
+                    soundFX.playClick();
+                    setActiveTab('library');
+                  }}
+                  className={`flex items-center gap-2 px-4 sm:px-6 py-2 rounded-full text-xs font-semibold tracking-tight transition-all ${
+                    activeTab === 'library'
+                      ? 'bg-[#0071e3] text-white shadow-md'
+                      : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>My Library</span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                    activeTab === 'library' ? 'bg-black/25 text-white' : 'bg-white/10 text-neutral-400'
+                  }`}>
+                    {libraryBookCount}
+                  </span>
+                </button>
 
-              {/* Right Upright Frame Rail */}
-              <div className="absolute -right-2 sm:-right-3 top-0 bottom-0 w-2.5 sm:w-3.5 rounded-sm bg-gradient-to-l from-[#14151b] to-[#22242e] border-l border-white/10 shadow-lg z-10 pointer-events-none" />
+                <button
+                  onClick={() => {
+                    soundFX.playClick();
+                    setActiveTab('wantToRead');
+                  }}
+                  className={`flex items-center gap-2 px-4 sm:px-6 py-2 rounded-full text-xs font-semibold tracking-tight transition-all ${
+                    activeTab === 'wantToRead'
+                      ? 'bg-[#0071e3] text-white shadow-md'
+                      : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Bookmark className="w-3.5 h-3.5" />
+                  <span>Want to Read</span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                    activeTab === 'wantToRead' ? 'bg-black/25 text-white' : 'bg-white/10 text-neutral-400'
+                  }`}>
+                    {wantToReadBookCount}
+                  </span>
+                </button>
+              </div>
 
-              {/* Continuous Shelves Stack */}
-              <div className="w-full">
-                {packedShelves.map((shelfItems, shelfIndex) => (
-                  <WallShelf
-                    key={`shelf-${shelfIndex}`}
-                    shelfItems={shelfItems}
-                    bookSize={bookSize}
-                    onInspectBook={(book) => setSelectedBook(book)}
-                    onToggleRead={handleToggleRead}
-                    onHoverStart={handleHoverStart}
-                    onHoverEnd={handleHoverEnd}
-                  />
-                ))}
+              {/* Informative Sub-caption */}
+              <div className="text-[11px] text-neutral-400 hidden sm:block">
+                {activeTab === 'library' ? (
+                  <span>Showing <strong>read tomes</strong> & <strong>active series</strong> with upcoming editions</span>
+                ) : (
+                  <span>Showing your <strong>unstarted wishlist series</strong> & <strong>TBR books</strong></span>
+                )}
               </div>
             </div>
+
+            {/* Empty State for Want to Read Tab if user has 0 TBR books */}
+            {activeTab === 'wantToRead' && wantToReadBookCount === 0 && (
+              <div className="max-w-md mx-auto py-16 px-4 text-center animate-fadeIn">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4 text-amber-400">
+                  <Bookmark className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-semibold text-white">Your Want to Read Shelf is Empty</h3>
+                <p className="text-xs text-neutral-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
+                  Books or unstarted series you mark as "Want to Read" in Goodreads will be collected right here on this shelf.
+                </p>
+                <button
+                  onClick={() => setActiveTab('library')}
+                  className="mt-5 text-xs text-[#0071e3] hover:text-[#0077ed] font-medium"
+                >
+                  ← Return to My Library
+                </button>
+              </div>
+            )}
+
+            {/* Architectural Built-In Bookshelf Stack */}
+            {(activeTab === 'library' || wantToReadBookCount > 0) && (
+              <div
+                ref={shelfContainerRef}
+                className="w-full max-w-[1260px] mx-auto px-3 sm:px-6 relative"
+              >
+                {/* Shelf Stack Unit Frame */}
+                <div className="relative w-full">
+                  {/* Left Upright Frame Rail */}
+                  <div className="absolute -left-2 sm:-left-3 top-0 bottom-0 w-2.5 sm:w-3.5 rounded-sm bg-gradient-to-r from-[#14151b] to-[#22242e] border-r border-white/10 shadow-lg z-10 pointer-events-none" />
+
+                  {/* Right Upright Frame Rail */}
+                  <div className="absolute -right-2 sm:-right-3 top-0 bottom-0 w-2.5 sm:w-3.5 rounded-sm bg-gradient-to-l from-[#14151b] to-[#22242e] border-l border-white/10 shadow-lg z-10 pointer-events-none" />
+
+                  {/* Continuous Shelves Stack */}
+                  <div className="w-full">
+                    {packedShelves.map((shelfItems, shelfIndex) => (
+                      <WallShelf
+                        key={`shelf-${activeTab}-${shelfIndex}`}
+                        shelfItems={shelfItems}
+                        bookSize={bookSize}
+                        onInspectBook={(book) => setSelectedBook(book)}
+                        onToggleRead={handleToggleRead}
+                        onHoverStart={handleHoverStart}
+                        onHoverEnd={handleHoverEnd}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
