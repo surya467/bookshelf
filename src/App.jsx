@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import Navbar from './components/Navbar';
 import WallShelf from './components/WallShelf';
@@ -38,34 +38,53 @@ function cleanForMatch(str) {
 }
 
 /**
- * Intelligent Bounded Shelf Packing Algorithm:
- * - Strictly enforces capacity so books never extend past the right edge of the window.
- * - Long series larger than capacity are gracefully split into sequential shelf rows (e.g., 'Series (cont.)').
- * - Smaller series are packed together on one shelf with clean dividers.
- * - Leftover space on shelves is filled with standalone/wishlist books.
+ * Intelligent Responsive Width-Based Shelf Packing Algorithm:
+ * - Computes physical pixel footprint of books, gaps, dividers, and titles.
+ * - Dynamically adapts to the user's screen width so books never get cut off on the right.
+ * - Long series that exceed shelf width are gracefully split into sequential shelf rows (e.g. 'Series (cont.)').
+ * - Smaller series share shelves, with remaining gaps filled by single/wishlist editions.
  */
-function packBookshelf(seriesList, standaloneBooks, wantToReadStandalone, capacity = 10) {
-  const shelves = [];
-  let currentShelfItems = [];
-  let currentShelfUsed = 0;
+function packBookshelfResponsive(seriesList, standaloneBooks, wantToReadStandalone, containerWidth = 1200, bookSize = 'default') {
+  const isCompact = bookSize === 'compact';
+  const isSmallScreen = containerWidth < 640;
+  const isMediumScreen = containerWidth < 768;
 
-  // Single books pool: both standalone read and standalone want-to-read
-  const allSingleBooks = [
-    ...(standaloneBooks || []),
-    ...(wantToReadStandalone || []),
-  ];
-  let singleBooksQueue = [...allSingleBooks];
+  let bookW = 84;
+  let bookGap = 10;
+  let dividerW = 22;
 
-  // Pre-process: Chunk any series that has more books than shelf capacity
+  if (isCompact) {
+    bookW = isSmallScreen ? 58 : isMediumScreen ? 68 : 74;
+    bookGap = 8;
+    dividerW = 18;
+  } else {
+    bookW = isSmallScreen ? 66 : isMediumScreen ? 76 : 84;
+    bookGap = 10;
+    dividerW = 22;
+  }
+
+  // Safe usable width with buffer for padding & right bookcase rail
+  const usableW = Math.max(280, containerWidth - 48);
+
+  function getSeriesWidth(numBooks) {
+    if (numBooks <= 0) return 0;
+    const booksW = (numBooks * bookW) + ((numBooks - 1) * bookGap);
+    // Single books have title minimum width of ~115px
+    return Math.max(booksW, numBooks === 1 ? 115 : 0);
+  }
+
+  const maxBooksOnEmptyShelf = Math.max(1, Math.floor((usableW + bookGap) / (bookW + bookGap)));
+
+  // Pre-process: Chunk any series that has more books than physical shelf width
   const chunkedSeriesList = [];
   for (const s of seriesList) {
-    if (s.books.length <= capacity) {
+    if (s.books.length <= maxBooksOnEmptyShelf) {
       chunkedSeriesList.push(s);
     } else {
       let offset = 0;
       let part = 1;
       while (offset < s.books.length) {
-        const chunk = s.books.slice(offset, offset + capacity);
+        const chunk = s.books.slice(offset, offset + maxBooksOnEmptyShelf);
         chunkedSeriesList.push({
           ...s,
           id: `${s.id}-part-${part}`,
@@ -75,59 +94,82 @@ function packBookshelf(seriesList, standaloneBooks, wantToReadStandalone, capaci
           totalCount: chunk.length,
           isCompleted: chunk.every((b) => b.isRead),
         });
-        offset += capacity;
+        offset += maxBooksOnEmptyShelf;
         part++;
       }
     }
   }
 
-  // Pack series onto shelves
-  for (const series of chunkedSeriesList) {
-    const seriesSize = series.books.length;
+  const shelves = [];
+  let currentShelfItems = [];
+  let currentShelfWidth = 0;
 
-    // If this series fits on current shelf alongside already mounted series
-    if (currentShelfUsed + seriesSize <= capacity) {
+  // Single books pool: both standalone read and standalone want-to-read
+  const allSingleBooks = [
+    ...(standaloneBooks || []),
+    ...(wantToReadStandalone || []),
+  ];
+  let singleBooksQueue = [...allSingleBooks];
+
+  // Pack series onto shelves based on physical width
+  for (const series of chunkedSeriesList) {
+    const seriesW = getSeriesWidth(series.books.length);
+    const neededW = currentShelfItems.length > 0 ? dividerW + seriesW : seriesW;
+
+    if (currentShelfWidth + neededW <= usableW) {
+      // Series fits on current shelf!
       currentShelfItems.push({ type: 'series', data: series });
-      currentShelfUsed += seriesSize;
+      currentShelfWidth += neededW;
     } else {
-      // If current shelf has room for single books, fill the remaining slots with single books!
-      const leftoverSlots = capacity - currentShelfUsed;
-      if (leftoverSlots > 0 && singleBooksQueue.length > 0) {
-        const fillBooks = singleBooksQueue.splice(0, leftoverSlots);
+      // Doesn't fit with previous series. Before wrapping, fill any leftover room with single books!
+      const remainingW = usableW - currentShelfWidth;
+      const neededForSinglesDivider = currentShelfItems.length > 0 ? dividerW : 0;
+      const availForSingles = remainingW - neededForSinglesDivider;
+      const singleSlots = Math.max(0, Math.floor((availForSingles + bookGap) / (bookW + bookGap)));
+
+      if (singleSlots > 0 && singleBooksQueue.length > 0) {
+        const fillBooks = singleBooksQueue.splice(0, singleSlots);
+        const fillW = getSeriesWidth(fillBooks.length);
         currentShelfItems.push({
           type: 'standalone-group',
           title: 'Single Editions',
           books: fillBooks,
         });
-        currentShelfUsed += fillBooks.length;
+        currentShelfWidth += neededForSinglesDivider + fillW;
       }
 
       if (currentShelfItems.length > 0) {
         shelves.push(currentShelfItems);
       }
 
-      // Start new shelf for this series
+      // Start new shelf with this series
       currentShelfItems = [{ type: 'series', data: series }];
-      currentShelfUsed = seriesSize;
+      currentShelfWidth = seriesW;
     }
   }
 
   // Pack any remaining single books across subsequent shelves
   while (singleBooksQueue.length > 0) {
-    const leftoverSlots = capacity - currentShelfUsed;
-    if (leftoverSlots > 0) {
-      const fillBooks = singleBooksQueue.splice(0, leftoverSlots);
+    const remainingW = usableW - currentShelfWidth;
+    const neededForSinglesDivider = currentShelfItems.length > 0 ? dividerW : 0;
+    const availForSingles = remainingW - neededForSinglesDivider;
+    const singleSlots = Math.max(0, Math.floor((availForSingles + bookGap) / (bookW + bookGap)));
+
+    if (singleSlots > 0) {
+      const fillBooks = singleBooksQueue.splice(0, singleSlots);
+      const fillW = getSeriesWidth(fillBooks.length);
       currentShelfItems.push({
         type: 'standalone-group',
         title: currentShelfItems.length === 0 ? 'Individual Works & Wishlist' : 'Single Editions',
         books: fillBooks,
       });
-      currentShelfUsed += fillBooks.length;
+      currentShelfWidth += neededForSinglesDivider + fillW;
     }
-    if (singleBooksQueue.length > 0) {
+
+    if (singleBooksQueue.length > 0 || currentShelfItems.length > 0) {
       shelves.push(currentShelfItems);
       currentShelfItems = [];
-      currentShelfUsed = 0;
+      currentShelfWidth = 0;
     }
   }
 
@@ -157,6 +199,12 @@ export default function App() {
   const [loadingBookCount, setLoadingBookCount] = useState(0);
   const [bookSize, setBookSize] = useState('default'); // 'compact' | 'default'
 
+  // Dynamic Shelf Container Width via ResizeObserver
+  const shelfContainerRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(
+    typeof window !== 'undefined' ? Math.min(window.innerWidth - 48, 1260) : 1200
+  );
+
   // Non-clipping Global Tooltip Hover State
   const [activeHover, setActiveHover] = useState(null);
 
@@ -164,6 +212,38 @@ export default function App() {
   const [selectedBook, setSelectedBook] = useState(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isOpenLibraryInfoOpen, setIsOpenLibraryInfoOpen] = useState(false);
+
+  // Measure shelf width dynamically
+  useEffect(() => {
+    const el = shelfContainerRef.current;
+    const updateWidth = () => {
+      const w = el ? el.clientWidth : window.innerWidth - 48;
+      if (w > 0) {
+        setContainerWidth(Math.min(w, 1260));
+      }
+    };
+
+    updateWidth();
+
+    let ro = null;
+    if (el && typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const w = entry.contentRect.width;
+          if (w > 0) {
+            setContainerWidth(Math.min(w, 1260));
+          }
+        }
+      });
+      ro.observe(el);
+    }
+
+    window.addEventListener('resize', updateWidth);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', updateWidth);
+    };
+  }, [seriesList.length, standaloneBooks.length]);
 
   // Check localStorage on mount
   useEffect(() => {
@@ -447,11 +527,16 @@ export default function App() {
 
   const hasData = seriesList.length > 0 || standaloneBooks.length > 0 || wantToReadStandalone.length > 0;
 
-  // Compute compact multi-series packed shelves with safe capacity limits
-  const shelfCapacity = bookSize === 'compact' ? 13 : 10;
+  // Compute dynamically packed shelves that fit the exact container width without overflow
   const packedShelves = useMemo(() => {
-    return packBookshelf(seriesList, standaloneBooks, wantToReadStandalone, shelfCapacity);
-  }, [seriesList, standaloneBooks, wantToReadStandalone, shelfCapacity]);
+    return packBookshelfResponsive(
+      seriesList,
+      standaloneBooks,
+      wantToReadStandalone,
+      containerWidth,
+      bookSize
+    );
+  }, [seriesList, standaloneBooks, wantToReadStandalone, containerWidth, bookSize]);
 
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-[#0071e3] selection:text-white relative bg-[#0c0d12] text-neutral-100 overflow-x-hidden">
@@ -492,9 +577,12 @@ export default function App() {
 
         {/* Architectural Built-In Bookshelf Stack */}
         {!isLoading && hasData && (
-          <div className="w-full max-w-[1260px] mx-auto px-3 sm:px-6 relative">
+          <div
+            ref={shelfContainerRef}
+            className="w-full max-w-[1260px] mx-auto px-3 sm:px-6 relative"
+          >
             {/* Shelf Stack Unit Frame */}
-            <div className="relative">
+            <div className="relative w-full">
               {/* Left Upright Frame Rail */}
               <div className="absolute -left-2 sm:-left-3 top-0 bottom-0 w-2.5 sm:w-3.5 rounded-sm bg-gradient-to-r from-[#14151b] to-[#22242e] border-r border-white/10 shadow-lg z-10 pointer-events-none" />
 

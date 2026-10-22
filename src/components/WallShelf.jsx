@@ -43,9 +43,9 @@ export default function WallShelf({
       {/* Content Container */}
       <div
         onWheel={handleWheel}
-        className="relative w-full overflow-x-auto pb-0 pt-2 px-2 sm:px-4 scrollbar-none"
+        className="relative w-full pb-0 pt-2 px-2 sm:px-3"
       >
-        <div className="flex items-end gap-2 sm:gap-3 min-w-max mx-auto justify-start">
+        <div className="flex items-end gap-2 sm:gap-2.5 w-full justify-start">
           {items.map((item, itemIdx) => {
             const isLast = itemIdx === items.length - 1;
 
@@ -56,8 +56,17 @@ export default function WallShelf({
                   {/* Series Block */}
                   <div id={`series-${s.id || itemIdx}`} className="flex flex-col flex-shrink-0 scroll-mt-24">
                     {/* Series Title: Placed at top starting from left of 1st book */}
-                    <div className="flex items-center gap-2 mb-1.5 pl-0.5 select-none">
-                      <span className="text-[11px] sm:text-[12px] font-semibold tracking-tight truncate max-w-[220px] sm:max-w-[320px] text-neutral-200">
+                    <div className="flex items-center gap-1.5 mb-1.5 pl-0.5 select-none">
+                      <span
+                        title={s.name}
+                        className={`text-[11px] sm:text-[12px] font-semibold tracking-tight truncate text-neutral-200 ${
+                          s.books.length === 1
+                            ? 'max-w-[105px] sm:max-w-[115px]'
+                            : s.books.length === 2
+                            ? 'max-w-[175px] sm:max-w-[195px]'
+                            : 'max-w-[260px] sm:max-w-[320px]'
+                        }`}
+                      >
                         {s.name}
                       </span>
                       <span className="text-[9.5px] font-mono px-1.5 py-0.2 rounded-full font-normal bg-white/10 text-neutral-400">
@@ -87,7 +96,7 @@ export default function WallShelf({
 
                   {/* Clean Minimalist Bookend Divider between different series on same shelf */}
                   {!isLast && (
-                    <div className="flex flex-col justify-end self-end h-[95px] sm:h-[110px] px-2 sm:px-2.5 pb-1 select-none pointer-events-none">
+                    <div className="flex flex-col justify-end self-end h-[95px] sm:h-[110px] px-1.5 sm:px-2 pb-1 select-none pointer-events-none">
                       <div className="w-[2px] h-9 rounded-full bg-white/15" />
                     </div>
                   )}
@@ -103,9 +112,17 @@ export default function WallShelf({
                 <React.Fragment key={`standalone-${itemIdx}`}>
                   {/* Standalone Single Books Sitting in Remaining Shelf Space */}
                   <div className="flex flex-col flex-shrink-0 scroll-mt-24">
-                    {/* Standalone Header starting from left of first book */}
-                    <div className="flex items-center gap-2 mb-1.5 pl-0.5 select-none">
-                      <span className="text-[11px] sm:text-[12px] font-semibold tracking-tight text-neutral-300">
+                    <div className="flex items-center gap-1.5 mb-1.5 pl-0.5 select-none">
+                      <span
+                        title={groupTitle}
+                        className={`text-[11px] sm:text-[12px] font-semibold tracking-tight text-neutral-300 truncate ${
+                          books.length === 1
+                            ? 'max-w-[105px] sm:max-w-[115px]'
+                            : books.length === 2
+                            ? 'max-w-[175px] sm:max-w-[195px]'
+                            : 'max-w-[260px] sm:max-w-[320px]'
+                        }`}
+                      >
                         {groupTitle}
                       </span>
                       <span className="text-[9.5px] font-mono px-1.5 py-0.2 rounded-full bg-white/10 text-neutral-400">
@@ -130,7 +147,7 @@ export default function WallShelf({
 
                   {/* Bookend Divider if followed by another item */}
                   {!isLast && (
-                    <div className="flex flex-col justify-end self-end h-[95px] sm:h-[110px] px-2 sm:px-2.5 pb-1 select-none pointer-events-none">
+                    <div className="flex flex-col justify-end self-end h-[95px] sm:h-[110px] px-1.5 sm:px-2 pb-1 select-none pointer-events-none">
                       <div className="w-[2px] h-9 rounded-full bg-white/15" />
                     </div>
                   )}
