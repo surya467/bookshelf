@@ -149,6 +149,32 @@ class SoundEngine {
       // Audio suppression fallback
     }
   }
+
+  // Realistic mechanical lamp toggle switch click
+  playLampClick() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(480, this.ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(90, this.ctx.currentTime + 0.04);
+
+      gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.04);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.045);
+    } catch {
+      // Audio fallback
+    }
+  }
 }
 
 export const soundFX = new SoundEngine();

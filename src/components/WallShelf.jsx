@@ -9,10 +9,10 @@ export default function WallShelf({
   isWantToReadShelf = false,
   wantToReadBooks = [],
   onInspectBook,
-  onToggleRead,
   bookSize = 'default',
   onHoverStart,
   onHoverEnd,
+  isNight = false,
 }) {
   // Normalize items for the shelf
   let items = [];
@@ -29,11 +29,24 @@ export default function WallShelf({
 
   if (items.length === 0) return null;
 
+  // Fix vertical scroll getting stuck when hovering over horizontal scroll container
+  const handleWheel = (e) => {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) * 0.8) {
+      window.scrollBy({
+        top: e.deltaY,
+        behavior: 'auto',
+      });
+    }
+  };
+
   return (
-    <div className="relative mb-14 sm:mb-16 animate-fadeIn w-full">
+    <div className="relative mb-12 sm:mb-14 animate-fadeIn w-full">
       {/* Scrollable / Responsive Content Container */}
-      <div className="relative w-full overflow-x-auto pb-0 pt-4 px-4 sm:px-8 scrollbar-none">
-        <div className="flex items-end gap-2 sm:gap-3 min-w-max mx-auto justify-start">
+      <div
+        onWheel={handleWheel}
+        className="relative w-full overflow-x-auto pb-0 pt-3 px-3 sm:px-6 scrollbar-none"
+      >
+        <div className="flex items-end gap-2 sm:gap-3.5 min-w-max mx-auto justify-start">
           {items.map((item, itemIdx) => {
             const isLast = itemIdx === items.length - 1;
 
@@ -43,41 +56,49 @@ export default function WallShelf({
                 <React.Fragment key={s.id || `series-${itemIdx}`}>
                   {/* Series Block */}
                   <div id={`series-${s.id || itemIdx}`} className="flex flex-col flex-shrink-0 scroll-mt-24">
-                    {/* Series Title: Placed at the top starting from the left of the 1st book */}
-                    <div className="flex items-center gap-2 mb-2 pl-0.5 select-none">
-                      <span className="text-[12px] sm:text-[13px] font-semibold text-white/95 tracking-tight truncate max-w-[200px] sm:max-w-[300px]">
+                    {/* Series Title: Placed at top starting from left of 1st book */}
+                    <div className="flex items-center gap-2 mb-1.5 pl-0.5 select-none">
+                      <span className={`text-[11px] sm:text-[12px] font-semibold tracking-tight truncate max-w-[200px] sm:max-w-[300px] ${
+                        isNight ? 'text-neutral-200' : 'text-neutral-800'
+                      }`}>
                         {s.name}
                       </span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 bg-white/10 text-white/70 rounded-full font-normal">
+                      <span className={`text-[9.5px] font-mono px-1.5 py-0.2 rounded-full font-normal ${
+                        isNight ? 'bg-white/10 text-neutral-400' : 'bg-black/5 text-neutral-600'
+                      }`}>
                         {s.readCount}/{s.totalCount}
                       </span>
                       {s.isCompleted && (
-                        <span className="text-[9px] font-medium text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                        <span className={`text-[9px] font-medium px-1.5 py-0.2 rounded ${
+                          isNight ? 'text-emerald-400 bg-emerald-500/10' : 'text-emerald-700 bg-emerald-100'
+                        }`}>
                           Complete
                         </span>
                       )}
                     </div>
 
-                    {/* Books of this Series */}
-                    <div className="flex items-end gap-2.5 sm:gap-3.5">
+                    {/* Books in this series */}
+                    <div className="flex items-end gap-2.5 sm:gap-3">
                       {s.books.map((book) => (
                         <Book3D
                           key={book.id}
                           book={book}
                           size={bookSize}
                           onInspect={onInspectBook}
-                          onToggleRead={onToggleRead}
                           onHoverStart={onHoverStart}
                           onHoverEnd={onHoverEnd}
+                          isNight={isNight}
                         />
                       ))}
                     </div>
                   </div>
 
-                  {/* Elegant Metallic Bookend Gap between different series on same shelf */}
+                  {/* Clean Minimalist Bookend Gap between different series on same shelf */}
                   {!isLast && (
-                    <div className="flex flex-col justify-end self-end h-[105px] sm:h-[125px] px-2 sm:px-3 pb-1 select-none">
-                      <div className="w-[3px] h-12 bg-gradient-to-t from-amber-400/50 via-white/20 to-transparent rounded-full shadow-[0_0_8px_rgba(251,191,36,0.3)]" />
+                    <div className="flex flex-col justify-end self-end h-[95px] sm:h-[115px] px-2.5 sm:px-3 pb-1 select-none pointer-events-none">
+                      <div className={`w-[2.5px] h-10 rounded-full ${
+                        isNight ? 'bg-amber-400/40 shadow-[0_0_6px_rgba(251,191,36,0.3)]' : 'bg-neutral-300'
+                      }`} />
                     </div>
                   )}
                 </React.Fragment>
@@ -90,29 +111,33 @@ export default function WallShelf({
 
               return (
                 <React.Fragment key={`standalone-${itemIdx}`}>
-                  {/* Standalone Books Block Sitting in Remaining Space */}
+                  {/* Standalone Single Books Sitting in Remaining Shelf Space */}
                   <div className="flex flex-col flex-shrink-0 scroll-mt-24">
                     {/* Standalone Header starting from left of first book */}
-                    <div className="flex items-center gap-2 mb-2 pl-0.5 select-none">
-                      <span className="text-[12px] sm:text-[13px] font-semibold text-white/70 tracking-tight">
+                    <div className="flex items-center gap-2 mb-1.5 pl-0.5 select-none">
+                      <span className={`text-[11px] sm:text-[12px] font-semibold tracking-tight ${
+                        isNight ? 'text-neutral-400' : 'text-neutral-600'
+                      }`}>
                         {groupTitle}
                       </span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 bg-white/10 text-white/50 rounded-full">
+                      <span className={`text-[9.5px] font-mono px-1.5 py-0.2 rounded-full ${
+                        isNight ? 'bg-white/10 text-neutral-400' : 'bg-black/5 text-neutral-500'
+                      }`}>
                         {books.length}
                       </span>
                     </div>
 
                     {/* Standalone Books */}
-                    <div className="flex items-end gap-2.5 sm:gap-3.5">
+                    <div className="flex items-end gap-2.5 sm:gap-3">
                       {books.map((book) => (
                         <Book3D
                           key={book.id}
                           book={book}
                           size={bookSize}
                           onInspect={onInspectBook}
-                          onToggleRead={onToggleRead}
                           onHoverStart={onHoverStart}
                           onHoverEnd={onHoverEnd}
+                          isNight={isNight}
                         />
                       ))}
                     </div>
@@ -120,8 +145,10 @@ export default function WallShelf({
 
                   {/* Bookend Gap if followed by another item */}
                   {!isLast && (
-                    <div className="flex flex-col justify-end self-end h-[105px] sm:h-[125px] px-2 sm:px-3 pb-1 select-none">
-                      <div className="w-[3px] h-12 bg-gradient-to-t from-amber-400/50 via-white/20 to-transparent rounded-full shadow-[0_0_8px_rgba(251,191,36,0.3)]" />
+                    <div className="flex flex-col justify-end self-end h-[95px] sm:h-[115px] px-2.5 sm:px-3 pb-1 select-none pointer-events-none">
+                      <div className={`w-[2.5px] h-10 rounded-full ${
+                        isNight ? 'bg-amber-400/40 shadow-[0_0_6px_rgba(251,191,36,0.3)]' : 'bg-neutral-300'
+                      }`} />
                     </div>
                   )}
                 </React.Fragment>
@@ -133,30 +160,21 @@ export default function WallShelf({
         </div>
       </div>
 
-      {/* Realistic Continuous Floating Architectural Shelf Ledge with Sculpted End Caps */}
-      <div className="relative w-full z-0 -mt-1 px-1 sm:px-2">
-        {/* Top Metallic Bevel Running Full Width */}
-        <div className="relative h-2 w-full bg-gradient-to-b from-[#2e313e] to-[#181a22] border-t border-white/25 rounded-t-[4px]">
-          {/* Left Sculpted Edge Cap */}
-          <div className="absolute left-0 inset-y-0 w-3 rounded-tl-[4px] bg-gradient-to-r from-white/25 to-transparent border-l border-white/30" />
-          {/* Right Sculpted Edge Cap */}
-          <div className="absolute right-0 inset-y-0 w-3 rounded-tr-[4px] bg-gradient-to-l from-white/25 to-transparent border-r border-white/30" />
-        </div>
+      {/* Real Built-In Bedroom Shelf Stack Ledge (White Shelves on Off-White Wall) */}
+      <div className="relative w-full z-0 -mt-1 px-1 sm:px-3 select-none pointer-events-none">
+        {/* Shelf Top Face (Beveled Lacquer Surface) */}
+        <div className={`h-2.5 w-full rounded-t-[3px] border-t transition-colors duration-500 ${
+          isNight
+            ? 'bg-gradient-to-b from-[#252834] to-[#161822] border-white/20'
+            : 'bg-gradient-to-b from-[#ffffff] to-[#f4f2ea] border-white shadow-inner'
+        }`} />
 
-        {/* Shelf Front Fascia Rail with Polished Metallic Trim */}
-        <div className="relative h-3.5 w-full shelf-ledge-dark rounded-b-[4px]">
-          {/* Left Finished Cap */}
-          <div className="absolute left-0 inset-y-0 w-2.5 rounded-bl-[4px] bg-gradient-to-r from-white/20 via-transparent to-transparent border-l border-white/25 shadow-sm" />
-          {/* Right Finished Cap */}
-          <div className="absolute right-0 inset-y-0 w-2.5 rounded-br-[4px] bg-gradient-to-l from-white/20 via-transparent to-transparent border-r border-white/25 shadow-sm" />
-        </div>
-
-        {/* Soft Ambient Warm/Cool LED Glow Cast onto Black Wall Underneath */}
-        <div className="h-8 w-full shelf-ambient-glow -mt-1 pointer-events-none" />
-
-        {/* Realistic Architectural Mounting Wall Brackets */}
-        <div className="absolute left-6 -bottom-2 w-2 h-3.5 bg-gradient-to-b from-zinc-600 to-black rounded-b border-x border-b border-white/10 opacity-75 shadow-sm pointer-events-none" />
-        <div className="absolute right-6 -bottom-2 w-2 h-3.5 bg-gradient-to-b from-zinc-600 to-black rounded-b border-x border-b border-white/10 opacity-75 shadow-sm pointer-events-none" />
+        {/* Shelf Front Fascia Rail (Clean Architectural White) */}
+        <div className={`h-3 w-full rounded-b-[3px] transition-colors duration-500 ${
+          isNight
+            ? 'night-shelf-ledge'
+            : 'white-shelf-ledge'
+        }`} />
       </div>
     </div>
   );

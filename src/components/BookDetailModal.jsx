@@ -1,20 +1,31 @@
-import React, { useState } from 'react';
-import { X, Check, Lock, ShoppingCart, ExternalLink, Star, Bookmark } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Check, Lock, ExternalLink, Star } from 'lucide-react';
 import { getPurchaseLinks } from '../services/openLibrary';
 
 export default function BookDetailModal({ book, onClose, onToggleRead }) {
   if (!book) return null;
 
   const [imgError, setImgError] = useState(false);
-  const isRead = !!book.isRead;
+  const [isReadState, setIsReadState] = useState(!!book.isRead);
+
+  useEffect(() => {
+    setIsReadState(!!book.isRead);
+  }, [book.isRead, book.id]);
+
   const isWantToRead = !!book.isWantToRead;
   const purchaseLinks = book.purchaseLinks || getPurchaseLinks(book.title, book.author, book.isbn13 || book.isbn);
 
+  const handleToggle = () => {
+    const next = !isReadState;
+    setIsReadState(next);
+    onToggleRead({ ...book, isRead: isReadState });
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
       <div className="absolute inset-0" onClick={onClose} />
 
-      <div className="relative w-full max-w-2xl bg-[#111318] border border-white/10 rounded-[28px] shadow-[0_30px_90px_rgba(0,0,0,0.9)] overflow-hidden z-10 flex flex-col md:flex-row max-h-[90vh]">
+      <div className="relative w-full max-w-2xl bg-[#14151c] border border-white/10 rounded-[28px] shadow-[0_30px_90px_rgba(0,0,0,0.85)] overflow-hidden z-10 flex flex-col md:flex-row max-h-[90vh]">
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -32,7 +43,7 @@ export default function BookDetailModal({ book, onClose, onToggleRead }) {
                 alt={book.title}
                 onError={() => setImgError(true)}
                 className={`max-h-[280px] max-w-full object-contain rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.8)] ${
-                  !isRead ? 'filter grayscale contrast-110 brightness-85' : ''
+                  !isReadState ? 'filter grayscale contrast-110 brightness-85' : ''
                 }`}
               />
             ) : (
@@ -45,14 +56,14 @@ export default function BookDetailModal({ book, onClose, onToggleRead }) {
 
           {/* Toggle Read Button */}
           <button
-            onClick={() => onToggleRead(book)}
+            onClick={handleToggle}
             className={`mt-6 w-full py-2.5 px-4 rounded-xl font-medium text-xs transition-all active:scale-95 shadow-sm ${
-              isRead
-                ? 'bg-white/10 hover:bg-white/15 text-white border border-white/10'
+              isReadState
+                ? 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
                 : 'bg-[#0071e3] hover:bg-[#0077ed] text-white'
             }`}
           >
-            {isRead ? 'Mark as Unread' : isWantToRead ? 'Mark as Read ✓' : 'Mark as Read'}
+            {isReadState ? 'Completed ✓ (Click to Unmark)' : 'Mark as Read'}
           </button>
         </div>
 
@@ -60,18 +71,17 @@ export default function BookDetailModal({ book, onClose, onToggleRead }) {
         <div className="p-6 sm:p-8 md:w-7/12 flex flex-col justify-between overflow-y-auto">
           <div>
             <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[11px] font-semibold text-[#0071e3] uppercase tracking-wider">
+              <span className="text-[10px] font-mono tracking-widest text-[#0071e3] uppercase">
                 {book.seriesName ? `${book.seriesName} • #${book.order || book.seriesNumber}` : 'Individual Work'}
               </span>
 
-              {isRead ? (
+              {isReadState ? (
                 <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Check className="w-3 h-3 stroke-[3]" />
                   <span>Read</span>
                 </span>
               ) : isWantToRead ? (
-                <span className="text-[10px] font-semibold text-[#0071e3] bg-[#0071e3]/10 border border-[#0071e3]/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Bookmark className="w-3 h-3 fill-[#0071e3]" />
+                <span className="text-[10px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <span>Want to Read</span>
                 </span>
               ) : (
@@ -93,19 +103,19 @@ export default function BookDetailModal({ book, onClose, onToggleRead }) {
             <div className="flex items-center gap-4 mt-4 py-2.5 px-3.5 bg-white/5 rounded-xl border border-white/5 text-[11px] text-white/70">
               {book.year && (
                 <div>
-                  <span className="text-white/40 block text-[9px] uppercase">Year</span>
+                  <span className="text-white/40 block text-[9px] uppercase font-mono">Year</span>
                   <span className="font-medium text-white/90">{book.year}</span>
                 </div>
               )}
               {book.pages > 0 && (
                 <div>
-                  <span className="text-white/40 block text-[9px] uppercase">Length</span>
+                  <span className="text-white/40 block text-[9px] uppercase font-mono">Length</span>
                   <span className="font-medium text-white/90">{book.pages} pages</span>
                 </div>
               )}
               {book.rating > 0 && (
                 <div>
-                  <span className="text-white/40 block text-[9px] uppercase">My Rating</span>
+                  <span className="text-white/40 block text-[9px] uppercase font-mono">My Rating</span>
                   <span className="font-medium text-amber-400 flex items-center gap-0.5">
                     <Star className="w-3 h-3 fill-amber-400" /> {book.rating}/5
                   </span>
@@ -113,7 +123,7 @@ export default function BookDetailModal({ book, onClose, onToggleRead }) {
               )}
               {book.dateRead && (
                 <div>
-                  <span className="text-white/40 block text-[9px] uppercase">Finished</span>
+                  <span className="text-white/40 block text-[9px] uppercase font-mono">Finished</span>
                   <span className="font-medium text-white/90">{book.dateRead}</span>
                 </div>
               )}

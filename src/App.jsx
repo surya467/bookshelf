@@ -6,7 +6,7 @@ import BookDetailModal from './components/BookDetailModal';
 import ImportModal from './components/ImportModal';
 import OpenLibraryInfoModal from './components/OpenLibraryInfoModal';
 import EmptyState from './components/EmptyState';
-import AmbientCanvas from './components/AmbientCanvas';
+import ReadingLamp from './components/ReadingLamp';
 import GlobalBookTooltip from './components/GlobalBookTooltip';
 import SortingBooksLoader from './components/SortingBooksLoader';
 import { parseGoodreadsCSV } from './services/goodreadsParser';
@@ -33,6 +33,19 @@ const getStoredApiKeys = () => {
   }
 };
 
+const getInitialTimeOfDay = () => {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 11) return 'morning';
+  if (h >= 11 && h < 17) return 'afternoon';
+  if (h >= 17 && h < 20) return 'sunset';
+  return 'night';
+};
+
+function cleanForMatch(str) {
+  if (!str) return '';
+  return str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+}
+
 /**
  * Intelligent Shelf Packing Algorithm:
  * - Packs multiple series onto a single shelf row.
@@ -54,7 +67,7 @@ function packBookshelf(seriesList, standaloneBooks, wantToReadStandalone, capaci
   for (const series of seriesList) {
     const seriesSize = series.books.length;
 
-    // If this series fits on the current shelf alongside already mounted series
+    // If this series fits on current shelf alongside already mounted series
     if (currentShelfUsed + seriesSize <= capacity) {
       currentShelfItems.push({ type: 'series', data: series });
       currentShelfUsed += seriesSize;
@@ -127,6 +140,12 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [bookSize, setBookSize] = useState('default'); // 'compact' | 'default'
 
+  // Dynamic Bedroom Lighting Engine
+  const [timeOfDay, setTimeOfDay] = useState(getInitialTimeOfDay());
+  const [lampOn, setLampOn] = useState(getInitialTimeOfDay() === 'night');
+
+  const isNight = timeOfDay === 'night';
+
   // Non-clipping Global Tooltip Hover State
   const [activeHover, setActiveHover] = useState(null);
 
@@ -134,6 +153,14 @@ export default function App() {
   const [selectedBook, setSelectedBook] = useState(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isOpenLibraryInfoOpen, setIsOpenLibraryInfoOpen] = useState(false);
+
+  // Auto adjust lamp on time of day changes
+  const handleTimeOfDayChange = (newTime) => {
+    setTimeOfDay(newTime);
+    if (newTime === 'night') {
+      setLampOn(true);
+    }
+  };
 
   // Check localStorage on mount
   useEffect(() => {
@@ -183,21 +210,32 @@ export default function App() {
     const willBeRead = !targetBook.isRead;
 
     if (willBeRead) {
-      soundFX.playFanfare();
+      soundFX.playUnlock();
       confetti({
         particleCount: 40,
         spread: 50,
-        origin: { y: 0.7 },
+        origin: { y: 0.65 },
         colors: ['#0071e3', '#34c759', '#fbfbfa'],
       });
     } else {
       soundFX.playClick();
     }
 
+    const matchesBook = (b) => {
+      if (!b) return false;
+      if (b.id && targetBook.id && String(b.id) === String(targetBook.id)) return true;
+      if (b.title && targetBook.title && cleanForMatch(b.title) === cleanForMatch(targetBook.title)) {
+        if (!b.author || !targetBook.author || cleanForMatch(b.author) === cleanForMatch(targetBook.author)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     let updatedSeriesList = seriesList.map((s) => {
       let changed = false;
       const updatedBooks = s.books.map((b) => {
-        if (b.id === targetBook.id) {
+        if (matchesBook(b)) {
           changed = true;
           return {
             ...b,
@@ -226,22 +264,24 @@ export default function App() {
     });
 
     let updatedStandalone = standaloneBooks.map((b) => {
-      if (b.id === targetBook.id) {
+      if (matchesBook(b)) {
         return {
           ...b,
           isRead: willBeRead,
           isGreyedOut: !willBeRead,
+          isWantToRead: willBeRead ? false : b.isWantToRead,
         };
       }
       return b;
     });
 
     let updatedWantToRead = wantToReadStandalone.map((b) => {
-      if (b.id === targetBook.id) {
+      if (matchesBook(b)) {
         return {
           ...b,
           isRead: willBeRead,
           isGreyedOut: !willBeRead,
+          isWantToRead: willBeRead ? false : b.isWantToRead,
         };
       }
       return b;
@@ -291,11 +331,12 @@ export default function App() {
     setStats(newStats);
     persistState(updatedSeriesList, updatedStandalone, updatedWantToRead, newStats);
 
-    if (selectedBook && selectedBook.id === targetBook.id) {
+    if (selectedBook && matchesBook(selectedBook)) {
       setSelectedBook({
         ...selectedBook,
         isRead: willBeRead,
         isGreyedOut: !willBeRead,
+        isWantToRead: willBeRead ? false : selectedBook.isWantToRead,
       });
     }
   };
@@ -321,7 +362,6 @@ export default function App() {
 
       persistState(resolved.seriesList, resolved.standaloneBooks, resolved.wantToReadStandalone || [], resolved.stats, newName);
 
-      // Brief animation pause for visual delight, then reveal shelves
       setTimeout(() => {
         setIsLoading(false);
         confetti({
@@ -330,7 +370,7 @@ export default function App() {
           origin: { y: 0.65 },
           colors: ['#0071e3', '#34c759', '#ffffff'],
         });
-      }, 500);
+      }, 450);
 
       // Non-blocking background worker to enrich covers for books that had no ISBN
       const allBooks = [];
@@ -407,14 +447,22 @@ export default function App() {
   }, [seriesList, standaloneBooks, wantToReadStandalone, shelfCapacity]);
 
   return (
-    <div className="min-h-screen flex flex-col font-sans selection:bg-[#0071e3] selection:text-white bg-[#060709] text-white relative overflow-x-hidden">
-      {/* Interactive WebGL / Canvas Ambient Lighting & Dust Particles */}
-      <AmbientCanvas />
+    <div className={`min-h-screen flex flex-col font-sans selection:bg-[#0071e3] selection:text-white relative overflow-x-hidden wall-${timeOfDay}`}>
+      {/* Dynamic Window Sunlight & Shadow Projector from Right */}
+      <div className={`fixed inset-0 pointer-events-none z-0 window-sunlight-${timeOfDay} transition-opacity duration-700`} />
+
+      {/* Diagonal Architectural Window Pane Shadows from Right */}
+      <div
+        className="fixed inset-0 pointer-events-none z-0 opacity-20 transition-opacity duration-700"
+        style={{
+          background: 'linear-gradient(220deg, rgba(0,0,0,0.18) 0%, transparent 40%, rgba(0,0,0,0.08) 50%, transparent 70%)',
+        }}
+      />
 
       {/* Global Fixed Non-Clipping Tooltip */}
-      <GlobalBookTooltip activeHover={activeHover} />
+      <GlobalBookTooltip activeHover={activeHover} isNight={isNight} />
 
-      {/* Navbar with Instant Search */}
+      {/* Navbar with Instant Search & Time Dial */}
       <Navbar
         userName={userName}
         onUpdateUserName={handleUpdateUserName}
@@ -431,10 +479,14 @@ export default function App() {
         standaloneBooks={standaloneBooks}
         wantToReadStandalone={wantToReadStandalone}
         onSelectBook={(b) => setSelectedBook(b)}
+        timeOfDay={timeOfDay}
+        onChangeTimeOfDay={handleTimeOfDayChange}
+        lampOn={lampOn}
+        onToggleLamp={() => setLampOn(!lampOn)}
       />
 
-      {/* Main Wall Shelf Gallery */}
-      <main className="flex-1 w-full pt-8 pb-16 relative z-10">
+      {/* Main Bedroom Shelf Stack */}
+      <main className="flex-1 w-full pt-6 pb-20 relative z-10">
         {/* Animated Sorting Loader */}
         {isLoading && (
           <SortingBooksLoader totalBooks={loadingBookCount} />
@@ -445,29 +497,64 @@ export default function App() {
           <EmptyState
             onImportCSV={handleImportCSV}
             onLoadDemo={handleLoadDemo}
+            isNight={isNight}
           />
         )}
 
-        {/* The Wall with Compact Multi-Series Floating Ledges */}
+        {/* Real Built-In Shelf Stack Unit on Bedroom Wall */}
         {!isLoading && hasData && (
-          <div className="w-full space-y-3 sm:space-y-4 max-w-[1550px] mx-auto px-2 sm:px-6">
-            {packedShelves.map((shelfItems, shelfIndex) => (
-              <WallShelf
-                key={`shelf-${shelfIndex}`}
-                shelfItems={shelfItems}
-                bookSize={bookSize}
-                onInspectBook={(book) => setSelectedBook(book)}
-                onToggleRead={handleToggleRead}
-                onHoverStart={handleHoverStart}
-                onHoverEnd={handleHoverEnd}
+          <div className="w-full max-w-[1550px] mx-auto px-2 sm:px-6 relative flex gap-4 sm:gap-6 items-start">
+            {/* The Shelf Stack Frame */}
+            <div className="flex-1 relative">
+              {/* Left Vertical Bookcase Frame Upright */}
+              <div className={`absolute -left-2 sm:-left-3 top-0 bottom-0 w-3 sm:w-4 rounded-sm border-r transition-colors duration-500 z-10 pointer-events-none ${
+                isNight
+                  ? 'bg-gradient-to-r from-[#171922] to-[#252834] border-white/10 shadow-lg'
+                  : 'bg-gradient-to-r from-[#ebe8df] to-[#ffffff] border-black/10 shadow-sm'
+              }`} />
+
+              {/* Right Vertical Bookcase Frame Upright */}
+              <div className={`absolute -right-2 sm:-right-3 top-0 bottom-0 w-3 sm:w-4 rounded-sm border-l transition-colors duration-500 z-10 pointer-events-none ${
+                isNight
+                  ? 'bg-gradient-to-l from-[#171922] to-[#252834] border-white/10 shadow-lg'
+                  : 'bg-gradient-to-l from-[#ebe8df] to-[#ffffff] border-black/10 shadow-sm'
+              }`} />
+
+              {/* Continuous Shelves Stack */}
+              <div className="w-full space-y-2 sm:space-y-3">
+                {packedShelves.map((shelfItems, shelfIndex) => (
+                  <WallShelf
+                    key={`shelf-${shelfIndex}`}
+                    shelfItems={shelfItems}
+                    bookSize={bookSize}
+                    onInspectBook={(book) => setSelectedBook(book)}
+                    onToggleRead={handleToggleRead}
+                    onHoverStart={handleHoverStart}
+                    onHoverEnd={handleHoverEnd}
+                    isNight={isNight}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Standing Designer Reading Lamp Beside the Shelves on the Right */}
+            <div className="hidden md:flex flex-col items-center pt-8 sticky top-24 select-none">
+              <ReadingLamp
+                isOn={lampOn}
+                onToggle={() => setLampOn(!lampOn)}
+                isNight={isNight}
               />
-            ))}
+            </div>
           </div>
         )}
       </main>
 
-      {/* Minimal Dark Architectural Floor Rim at Bottom */}
-      <div className="w-full h-8 bg-gradient-to-t from-[#020203] via-[#050608] to-transparent border-t border-white/[0.05] mt-auto relative z-10" />
+      {/* Bedroom Hardwood Baseboard Trim at Bottom */}
+      <div className={`w-full h-7 border-t transition-colors duration-500 mt-auto relative z-10 ${
+        isNight
+          ? 'bg-gradient-to-t from-[#090b10] to-[#12141c] border-white/10'
+          : 'bg-gradient-to-t from-[#dedad0] to-[#ece8de] border-black/[0.08] shadow-inner'
+      }`} />
 
       {/* Modals */}
       {selectedBook && (

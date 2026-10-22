@@ -1,7 +1,7 @@
 import React from 'react';
-import { Check, Bookmark, Lock, Star } from 'lucide-react';
+import { Star } from 'lucide-react';
 
-export default function GlobalBookTooltip({ activeHover }) {
+export default function GlobalBookTooltip({ activeHover, isNight = false }) {
   if (!activeHover || !activeHover.book || !activeHover.rect) return null;
 
   const { book, rect } = activeHover;
@@ -9,15 +9,15 @@ export default function GlobalBookTooltip({ activeHover }) {
   const isWantToRead = !!book.isWantToRead;
 
   // Calculate coordinates with safety boundaries
-  const tooltipWidth = 240;
+  const tooltipWidth = 230;
   let left = rect.left + rect.width / 2 - tooltipWidth / 2;
   // Prevent clipping off screen edges
   left = Math.max(16, Math.min(left, window.innerWidth - tooltipWidth - 16));
 
   // If there's enough room above, place above; otherwise place below
-  const placeBelow = rect.top < 140;
-  const top = placeBelow ? rect.bottom + 12 : undefined;
-  const bottom = !placeBelow ? window.innerHeight - rect.top + 12 : undefined;
+  const placeBelow = rect.top < 135;
+  const top = placeBelow ? rect.bottom + 10 : undefined;
+  const bottom = !placeBelow ? window.innerHeight - rect.top + 10 : undefined;
 
   return (
     <div
@@ -30,49 +30,54 @@ export default function GlobalBookTooltip({ activeHover }) {
         zIndex: 99999,
         pointerEvents: 'none',
       }}
-      className="animate-fadeIn select-none"
+      className="animate-fadeIn select-none pointer-events-none"
     >
-      <div className="p-3 rounded-2xl bg-[#14161f]/95 backdrop-blur-2xl border border-white/20 text-white shadow-[0_20px_50px_rgba(0,0,0,0.9),0_0_20px_rgba(0,113,227,0.25)]">
-        {/* Series & Order Badge */}
-        <div className="flex items-center justify-between gap-1 mb-1 text-[10px]">
-          <span className="text-[#0071e3] font-semibold tracking-wide uppercase truncate max-w-[150px]">
-            {book.seriesName ? `${book.seriesName}` : 'Individual Work'}
+      {/* Museum Archive / Architectural Index Card */}
+      <div className="p-3 rounded-xl bg-[#14151b]/95 backdrop-blur-xl border border-white/15 text-white shadow-[0_15px_35px_rgba(0,0,0,0.55)]">
+        {/* Micro Category & Volume */}
+        <div className="flex items-center justify-between text-[9px] font-mono tracking-widest text-neutral-400 uppercase mb-1">
+          <span className="truncate max-w-[150px]">
+            {book.seriesName || 'Standalone'}
           </span>
           {book.order !== undefined && book.order !== null && (
-            <span className="font-mono text-white/50 bg-white/10 px-1.5 py-0.2 rounded text-[9px]">
-              Vol #{book.order === 0 ? 'P' : book.order}
+            <span className="text-neutral-500">
+              #{book.order === 0 ? 'P' : book.order}
             </span>
           )}
         </div>
 
-        {/* Title & Author */}
-        <h4 className="text-xs font-semibold text-white leading-tight line-clamp-2">
+        {/* Book Title */}
+        <h4 className="text-xs font-semibold text-neutral-100 leading-snug line-clamp-2">
           {book.title}
         </h4>
-        <p className="text-[10px] text-white/60 mt-0.5 truncate">{book.author}</p>
+        <p className="text-[10px] text-neutral-400 mt-0.5 truncate">{book.author}</p>
 
-        {/* Status and Rating Footer */}
-        <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-white/10 text-[10px]">
+        {/* Minimalist Status & Rating */}
+        <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10 text-[10px]">
           {isRead ? (
-            <span className="text-emerald-400 font-medium flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-              <Check className="w-2.5 h-2.5 stroke-[3]" /> Read
+            <span className="text-emerald-400 font-medium flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+              Completed
             </span>
           ) : isWantToRead ? (
-            <span className="text-[#0071e3] font-medium flex items-center gap-1 bg-[#0071e3]/10 px-2 py-0.5 rounded-full border border-[#0071e3]/20">
-              <Bookmark className="w-2.5 h-2.5 fill-[#0071e3]" /> Want to Read
+            <span className="text-amber-300 font-medium flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+              Want to Read
             </span>
           ) : (
-            <span className="text-white/50 font-medium flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
-              <Lock className="w-2.5 h-2.5" /> Missing Tome
+            <span className="text-neutral-400 font-medium flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-500 inline-block" />
+              Missing Tome
             </span>
           )}
 
           {book.rating > 0 ? (
-            <span className="text-amber-400 font-medium flex items-center gap-0.5">
-              <Star className="w-2.5 h-2.5 fill-amber-400" /> {book.rating}★
+            <span className="text-neutral-300 font-mono text-[9px] flex items-center gap-0.5">
+              <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
+              {book.rating}
             </span>
           ) : (
-            <span className="text-white/40 text-[9px]">Click for details</span>
+            <span className="text-neutral-500 text-[9px]">Click to inspect</span>
           )}
         </div>
       </div>

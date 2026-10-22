@@ -6,6 +6,7 @@ export default function SearchBar({
   standaloneBooks = [],
   wantToReadStandalone = [],
   onSelectBook,
+  isNight = false,
 }) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -104,7 +105,9 @@ export default function SearchBar({
     <div ref={containerRef} className="relative w-full max-w-xs sm:max-w-sm">
       {/* Search Input Box */}
       <div className="relative flex items-center">
-        <Search className="w-3.5 h-3.5 text-white/40 absolute left-3 pointer-events-none" />
+        <Search className={`w-3.5 h-3.5 absolute left-3 pointer-events-none ${
+          isNight ? 'text-white/40' : 'text-neutral-400'
+        }`} />
         <input
           ref={inputRef}
           type="text"
@@ -115,7 +118,11 @@ export default function SearchBar({
           }}
           onFocus={() => setIsOpen(true)}
           placeholder="Search books, authors, series..."
-          className="w-full bg-white/5 hover:bg-white/[0.08] focus:bg-[#12141c] text-white text-xs pl-8 pr-16 py-1.5 rounded-full border border-white/10 focus:border-[#0071e3] focus:outline-none transition-all placeholder:text-white/30"
+          className={`w-full text-xs pl-8 pr-16 py-1.5 rounded-full border transition-all ${
+            isNight
+              ? 'bg-white/5 hover:bg-white/[0.08] focus:bg-[#12141c] text-white border-white/10 focus:border-[#0071e3] placeholder:text-white/30'
+              : 'bg-white hover:bg-neutral-50 focus:bg-white text-neutral-900 border-black/10 focus:border-[#0071e3] placeholder:text-neutral-400 shadow-sm'
+          }`}
         />
 
         {query ? (
@@ -124,12 +131,16 @@ export default function SearchBar({
               setQuery('');
               setIsOpen(false);
             }}
-            className="absolute right-2.5 p-0.5 rounded-full hover:bg-white/10 text-white/40 hover:text-white"
+            className={`absolute right-2.5 p-0.5 rounded-full hover:bg-black/10 ${
+              isNight ? 'text-white/40 hover:text-white' : 'text-neutral-400 hover:text-neutral-900'
+            }`}
           >
             <X className="w-3 h-3" />
           </button>
         ) : (
-          <kbd className="hidden sm:inline-block absolute right-2.5 px-1.5 py-0.5 text-[9px] font-mono text-white/40 bg-white/10 rounded border border-white/10 pointer-events-none">
+          <kbd className={`hidden sm:inline-block absolute right-2.5 px-1.5 py-0.5 text-[9px] font-mono rounded border pointer-events-none ${
+            isNight ? 'text-white/40 bg-white/10 border-white/10' : 'text-neutral-400 bg-neutral-100 border-neutral-200'
+          }`}>
             /
           </kbd>
         )}
@@ -137,9 +148,13 @@ export default function SearchBar({
 
       {/* Instant Search Results Dropdown */}
       {isOpen && cleanQ.length >= 2 && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-[#12141c]/98 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.95)] max-h-[70vh] overflow-y-auto p-2 z-50 animate-fadeIn text-white">
+        <div className={`absolute top-full left-0 right-0 mt-2 backdrop-blur-2xl border rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.45)] max-h-[70vh] overflow-y-auto p-2 z-50 animate-fadeIn ${
+          isNight
+            ? 'bg-[#12141c]/98 border-white/15 text-white shadow-[0_20px_60px_rgba(0,0,0,0.95)]'
+            : 'bg-white/98 border-black/10 text-neutral-900'
+        }`}>
           {!hasResults && (
-            <div className="p-4 text-center text-xs text-white/40">
+            <div className="p-4 text-center text-xs opacity-50">
               No matching books or series found for "{query}".
             </div>
           )}
@@ -147,7 +162,7 @@ export default function SearchBar({
           {/* Series Matches */}
           {matchingSeries.length > 0 && (
             <div className="mb-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40 px-2.5 py-1 block">
+              <span className="text-[9px] font-semibold uppercase tracking-wider opacity-50 px-2.5 py-1 block">
                 Series ({matchingSeries.length})
               </span>
               <div className="space-y-0.5">
@@ -155,18 +170,18 @@ export default function SearchBar({
                   <button
                     key={s.id}
                     onClick={() => handleJumpToSeries(s)}
-                    className="w-full text-left p-2 rounded-xl hover:bg-white/10 flex items-center justify-between transition-colors group"
+                    className="w-full text-left p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-between transition-colors group"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <Layers className="w-3.5 h-3.5 text-[#0071e3] flex-shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-xs font-medium text-white truncate group-hover:text-[#0071e3]">
+                        <p className="text-xs font-medium truncate group-hover:text-[#0071e3]">
                           {s.name}
                         </p>
-                        <p className="text-[10px] text-white/50 truncate">{s.author}</p>
+                        <p className="text-[10px] opacity-60 truncate">{s.author}</p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono text-white/40 bg-white/5 px-1.5 py-0.5 rounded">
+                    <span className="text-[10px] font-mono opacity-50 px-1.5 py-0.5 rounded">
                       {s.readCount}/{s.totalCount} read
                     </span>
                   </button>
@@ -178,7 +193,7 @@ export default function SearchBar({
           {/* Books Matches */}
           {matchingBooks.length > 0 && (
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40 px-2.5 py-1 block">
+              <span className="text-[9px] font-semibold uppercase tracking-wider opacity-50 px-2.5 py-1 block">
                 Books ({matchingBooks.length})
               </span>
               <div className="space-y-0.5">
@@ -186,7 +201,7 @@ export default function SearchBar({
                   <button
                     key={b.id}
                     onClick={() => handleJumpToBook(b)}
-                    className="w-full text-left p-2 rounded-xl hover:bg-white/10 flex items-center justify-between transition-colors group"
+                    className="w-full text-left p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-between transition-colors group"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       {b.coverUrl ? (
@@ -196,15 +211,15 @@ export default function SearchBar({
                           className="w-7 h-10 object-cover rounded shadow-sm flex-shrink-0"
                         />
                       ) : (
-                        <div className="w-7 h-10 rounded bg-white/5 border border-white/10 flex items-center justify-center text-[8px] text-white/40 flex-shrink-0">
+                        <div className="w-7 h-10 rounded bg-black/5 dark:bg-white/5 border flex items-center justify-center text-[8px] opacity-50 flex-shrink-0">
                           Book
                         </div>
                       )}
                       <div className="min-w-0">
-                        <p className="text-xs font-medium text-white truncate group-hover:text-[#0071e3]">
+                        <p className="text-xs font-medium truncate group-hover:text-[#0071e3]">
                           {b.title}
                         </p>
-                        <p className="text-[10px] text-white/50 truncate">
+                        <p className="text-[10px] opacity-60 truncate">
                           {b.seriesName ? `${b.seriesName} • ` : ''}
                           {b.author}
                         </p>
@@ -213,16 +228,16 @@ export default function SearchBar({
 
                     <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
                       {b.isRead ? (
-                        <span className="text-[10px] text-emerald-400 flex items-center gap-0.5">
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-0.5">
                           <Check className="w-3 h-3" /> Read
                         </span>
                       ) : b.isWantToRead ? (
-                        <span className="text-[10px] text-[#0071e3] flex items-center gap-0.5">
-                          <Bookmark className="w-3 h-3 fill-[#0071e3]" /> To Read
+                        <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-0.5">
+                          Wishlist
                         </span>
                       ) : (
-                        <span className="text-[10px] text-white/40 flex items-center gap-0.5">
-                          <Lock className="w-3 h-3" /> Missing
+                        <span className="text-[10px] opacity-50 flex items-center gap-0.5">
+                          Missing
                         </span>
                       )}
                     </div>
