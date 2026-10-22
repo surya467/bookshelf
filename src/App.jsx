@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import Navbar from './components/Navbar';
 import WallShelf from './components/WallShelf';
@@ -6,6 +6,7 @@ import BookDetailModal from './components/BookDetailModal';
 import ImportModal from './components/ImportModal';
 import OpenLibraryInfoModal from './components/OpenLibraryInfoModal';
 import EmptyState from './components/EmptyState';
+import AmbientCanvas from './components/AmbientCanvas';
 import { parseGoodreadsCSV } from './services/goodreadsParser';
 import { resolveLibrarySeries } from './services/seriesResolver';
 import { soundFX } from './services/soundFx';
@@ -29,6 +30,80 @@ const getStoredApiKeys = () => {
   }
 };
 
+/**
+ * Intelligent Shelf Packing Algorithm:
+ * - Packs multiple series onto a single shelf row.
+ * - Fills any leftover space on a shelf with single/standalone books.
+ * - Compares book counts against shelf capacity (e.g. 12-14 books per shelf).
+ */
+function packBookshelf(seriesList, standaloneBooks, wantToReadStandalone, capacity = 13) {
+  const shelves = [];
+  let currentShelfItems = [];
+  let currentShelfUsed = 0;
+
+  // Single books pool: both standalone read and standalone want-to-read
+  const allSingleBooks = [
+    ...(standaloneBooks || []),
+    ...(wantToReadStandalone || []),
+  ];
+  let singleBooksQueue = [...allSingleBooks];
+
+  for (const series of seriesList) {
+    const seriesSize = series.books.length;
+
+    // If this series fits on the current shelf alongside already mounted series
+    if (currentShelfUsed + seriesSize <= capacity) {
+      currentShelfItems.push({ type: 'series', data: series });
+      currentShelfUsed += seriesSize;
+    } else {
+      // If current shelf has room for single books, fill the remaining slots with single books!
+      const leftoverSlots = capacity - currentShelfUsed;
+      if (leftoverSlots > 0 && singleBooksQueue.length > 0) {
+        const fillBooks = singleBooksQueue.splice(0, leftoverSlots);
+        currentShelfItems.push({
+          type: 'standalone-group',
+          title: 'Single Editions',
+          books: fillBooks,
+        });
+        currentShelfUsed += fillBooks.length;
+      }
+
+      if (currentShelfItems.length > 0) {
+        shelves.push(currentShelfItems);
+      }
+
+      // Start new shelf for this series
+      currentShelfItems = [{ type: 'series', data: series }];
+      currentShelfUsed = seriesSize;
+    }
+  }
+
+  // Pack any remaining single books across subsequent shelves
+  while (singleBooksQueue.length > 0) {
+    const leftoverSlots = capacity - currentShelfUsed;
+    if (leftoverSlots > 0) {
+      const fillBooks = singleBooksQueue.splice(0, leftoverSlots);
+      currentShelfItems.push({
+        type: 'standalone-group',
+        title: currentShelfItems.length === 0 ? 'Individual Works & Wishlist' : 'Single Editions',
+        books: fillBooks,
+      });
+      currentShelfUsed += fillBooks.length;
+    }
+    if (singleBooksQueue.length > 0) {
+      shelves.push(currentShelfItems);
+      currentShelfItems = [];
+      currentShelfUsed = 0;
+    }
+  }
+
+  if (currentShelfItems.length > 0) {
+    shelves.push(currentShelfItems);
+  }
+
+  return shelves;
+}
+
 export default function App() {
   const [seriesList, setSeriesList] = useState([]);
   const [standaloneBooks, setStandaloneBooks] = useState([]);
@@ -46,6 +121,7 @@ export default function App() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [bookSize, setBookSize] = useState('default'); // 'compact' | 'default'
 
   // Modals
   const [selectedBook, setSelectedBook] = useState(null);
@@ -97,26 +173,25 @@ export default function App() {
 
   const handleToggleRead = (targetBook) => {
     soundFX.init();
-
     const willBeRead = !targetBook.isRead;
+
     if (willBeRead) {
-      soundFX.playUnlock();
+      soundFX.playFanfare();
       confetti({
         particleCount: 40,
         spread: 50,
         origin: { y: 0.7 },
-        colors: ['#0071e3', '#34c759', '#1d1d1f', '#86868b'],
+        colors: ['#0071e3', '#34c759', '#fbfbfa'],
       });
     } else {
-      soundFX.playPageFlip();
+      soundFX.playClick();
     }
 
-    let updatedSeriesList = seriesList.map((series) => {
-      const hasTarget = series.books.some((b) => b.id === targetBook.id);
-      if (!hasTarget) return series;
-
-      const updatedBooks = series.books.map((b) => {
+    let updatedSeriesList = seriesList.map((s) => {
+      let changed = false;
+      const updatedBooks = s.books.map((b) => {
         if (b.id === targetBook.id) {
+          changed = true;
           return {
             ...b,
             isRead: willBeRead,
@@ -127,30 +202,19 @@ export default function App() {
         return b;
       });
 
+      if (!changed) return s;
+
       const readCount = updatedBooks.filter((b) => b.isRead).length;
       const totalCount = updatedBooks.length;
-      const completionPercent = Math.round((readCount / totalCount) * 100);
-      const isCompleted = readCount === totalCount;
-
-      if (isCompleted && !series.isCompleted) {
-        setTimeout(() => {
-          soundFX.playSeriesMastery();
-          confetti({
-            particleCount: 80,
-            spread: 70,
-            origin: { y: 0.5 },
-            colors: ['#0071e3', '#34c759', '#ff9500'],
-          });
-        }, 300);
-      }
+      const percent = Math.round((readCount / totalCount) * 100);
 
       return {
-        ...series,
+        ...s,
         books: updatedBooks,
         readCount,
         missingCount: totalCount - readCount,
-        completionPercent,
-        isCompleted,
+        completionPercent: percent,
+        isCompleted: readCount === totalCount,
       };
     });
 
@@ -184,9 +248,9 @@ export default function App() {
     let totalTrackedBooks = 0;
 
     updatedSeriesList.forEach((s) => {
+      totalTrackedBooks += s.totalCount;
       totalRead += s.readCount;
       totalMissing += s.missingCount;
-      totalTrackedBooks += s.totalCount;
       if (s.isCompleted) completedSeries++;
       s.books.forEach((b) => {
         if (!b.isRead) totalMissingCost += b.price || 14.99;
@@ -251,7 +315,7 @@ export default function App() {
         particleCount: 60,
         spread: 60,
         origin: { y: 0.6 },
-        colors: ['#0071e3', '#34c759', '#1d1d1f'],
+        colors: ['#0071e3', '#34c759', '#ffffff'],
       });
     } catch (e) {
       console.error('Import error:', e);
@@ -300,8 +364,17 @@ export default function App() {
 
   const hasData = seriesList.length > 0 || standaloneBooks.length > 0 || wantToReadStandalone.length > 0;
 
+  // Compute compact multi-series packed shelves
+  const shelfCapacity = bookSize === 'compact' ? 15 : 12;
+  const packedShelves = useMemo(() => {
+    return packBookshelf(seriesList, standaloneBooks, wantToReadStandalone, shelfCapacity);
+  }, [seriesList, standaloneBooks, wantToReadStandalone, shelfCapacity]);
+
   return (
-    <div className="min-h-screen flex flex-col font-sans selection:bg-[#0071e3] selection:text-white relative">
+    <div className="min-h-screen flex flex-col font-sans selection:bg-[#0071e3] selection:text-white bg-[#060709] text-white relative overflow-x-hidden">
+      {/* Interactive WebGL / Canvas Ambient Lighting & Dust Particles */}
+      <AmbientCanvas />
+
       {/* Navbar */}
       <Navbar
         userName={userName}
@@ -313,16 +386,18 @@ export default function App() {
         onResetLibrary={handleResetLibrary}
         onOpenOpenLibraryInfo={() => setIsOpenLibraryInfoOpen(true)}
         hasData={hasData}
+        bookSize={bookSize}
+        onChangeBookSize={(sz) => setBookSize(sz)}
       />
 
       {/* Main Wall Shelf Gallery */}
-      <main className="flex-1 w-full pt-10 pb-20">
+      <main className="flex-1 w-full pt-8 pb-16 relative z-10">
         {/* Loading Spinner */}
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-28 text-center">
-            <div className="w-10 h-10 border-2 border-black/[0.1] border-t-[#0071e3] rounded-full animate-spin mb-4" />
-            <h3 className="text-sm font-semibold text-[#1d1d1f]">Mounting Books on Wall...</h3>
-            <p className="text-xs text-[#86868b] mt-1">Resolving series & shelves</p>
+            <div className="w-10 h-10 border-2 border-white/10 border-t-[#0071e3] rounded-full animate-spin mb-4" />
+            <h3 className="text-sm font-semibold text-white">Mounting Books on Wall...</h3>
+            <p className="text-xs text-white/50 mt-1">Resolving series & compact shelves</p>
           </div>
         )}
 
@@ -334,44 +409,24 @@ export default function App() {
           />
         )}
 
-        {/* The Wall with Floating Picture-Ledge Shelves */}
+        {/* The Wall with Compact Multi-Series Floating Ledges */}
         {!isLoading && hasData && (
-          <div className="w-full space-y-4">
-            {/* Series Shelves */}
-            {seriesList.map((series) => (
+          <div className="w-full space-y-4 max-w-[1550px] mx-auto px-2 sm:px-6">
+            {packedShelves.map((shelfItems, shelfIndex) => (
               <WallShelf
-                key={series.id}
-                series={series}
+                key={`shelf-${shelfIndex}`}
+                shelfItems={shelfItems}
+                bookSize={bookSize}
                 onInspectBook={(book) => setSelectedBook(book)}
                 onToggleRead={handleToggleRead}
               />
             ))}
-
-            {/* Standalone Want-to-Read Shelf */}
-            {wantToReadStandalone && wantToReadStandalone.length > 0 && (
-              <WallShelf
-                isWantToReadShelf={true}
-                wantToReadBooks={wantToReadStandalone}
-                onInspectBook={(book) => setSelectedBook(book)}
-                onToggleRead={handleToggleRead}
-              />
-            )}
-
-            {/* Standalone Completed Works Shelf */}
-            {standaloneBooks && standaloneBooks.length > 0 && (
-              <WallShelf
-                isStandalone={true}
-                standaloneBooks={standaloneBooks}
-                onInspectBook={(book) => setSelectedBook(book)}
-                onToggleRead={handleToggleRead}
-              />
-            )}
           </div>
         )}
       </main>
 
-      {/* Scandinavian Oak Wood Floor Accent at Bottom */}
-      <div className="w-full h-10 bg-gradient-to-t from-[#c5aa86] via-[#d4bc98] to-[#dfdeda] border-t border-black/[0.08] shadow-inner opacity-75 mt-auto" />
+      {/* Minimal Dark Architectural Floor Rim at Bottom */}
+      <div className="w-full h-8 bg-gradient-to-t from-[#020203] via-[#050608] to-transparent border-t border-white/[0.05] mt-auto relative z-10" />
 
       {/* Modals */}
       {selectedBook && (

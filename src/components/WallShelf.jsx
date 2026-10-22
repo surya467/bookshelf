@@ -2,6 +2,7 @@ import React from 'react';
 import Book3D from './Book3D';
 
 export default function WallShelf({
+  shelfItems = [],
   series,
   isStandalone = false,
   standaloneBooks = [],
@@ -9,129 +10,131 @@ export default function WallShelf({
   wantToReadBooks = [],
   onInspectBook,
   onToggleRead,
+  bookSize = 'default',
 }) {
-  // Case 1: Standalone Read Works
-  if (isStandalone) {
-    if (!standaloneBooks || standaloneBooks.length === 0) return null;
+  // Normalize items for the shelf
+  let items = [];
 
-    return (
-      <div className="relative mb-20 animate-fadeIn">
-        <div className="max-w-7xl mx-auto px-6 sm:px-12 flex items-baseline justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <h3 className="text-sm sm:text-base font-semibold tracking-wider uppercase text-[#1d1d1f]">
-              Standalone Completed Works
-            </h3>
-            <span className="text-xs text-[#86868b] font-normal">
-              &bull; Individual Finished Volumes
-            </span>
-          </div>
-          <span className="text-xs text-[#86868b] font-medium">
-            {standaloneBooks.length} Volumes
-          </span>
-        </div>
-
-        <div className="relative w-full overflow-x-auto pb-0 pt-6 px-6 sm:px-12 scrollbar-none">
-          <div className="flex items-end gap-5 sm:gap-7 min-w-max mx-auto justify-start sm:justify-center">
-            {standaloneBooks.map((book) => (
-              <Book3D
-                key={book.id}
-                book={book}
-                onInspect={onInspectBook}
-                onToggleRead={onToggleRead}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="relative w-full max-w-[96%] mx-auto z-0 -mt-1">
-          <div className="h-2 w-full bg-gradient-to-b from-[#f4f3ef] to-[#ffffff] border-t border-white/60" />
-          <div className="h-3.5 w-full bg-white border-t border-black/[0.04] border-b border-black/[0.08] shelf-shadow" />
-        </div>
-      </div>
-    );
+  if (shelfItems && shelfItems.length > 0) {
+    items = shelfItems;
+  } else if (series) {
+    items = [{ type: 'series', data: series }];
+  } else if (isStandalone && standaloneBooks.length > 0) {
+    items = [{ type: 'standalone-group', title: 'Individual Works', books: standaloneBooks }];
+  } else if (isWantToReadShelf && wantToReadBooks.length > 0) {
+    items = [{ type: 'standalone-group', title: 'Wishlist & To-Read', books: wantToReadBooks }];
   }
 
-  // Case 2: Standalone Want-to-Read Wishlist Works
-  if (isWantToReadShelf) {
-    if (!wantToReadBooks || wantToReadBooks.length === 0) return null;
-
-    return (
-      <div className="relative mb-20 animate-fadeIn">
-        <div className="max-w-7xl mx-auto px-6 sm:px-12 flex items-baseline justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <h3 className="text-sm sm:text-base font-semibold tracking-wider uppercase text-[#0071e3]">
-              Want to Read &bull; Standalone Wishlist
-            </h3>
-            <span className="text-xs text-[#86868b] font-normal">
-              &bull; From your Goodreads to-read shelf
-            </span>
-          </div>
-          <span className="text-xs text-[#86868b] font-medium">
-            {wantToReadBooks.length} Books
-          </span>
-        </div>
-
-        <div className="relative w-full overflow-x-auto pb-0 pt-6 px-6 sm:px-12 scrollbar-none">
-          <div className="flex items-end gap-5 sm:gap-7 min-w-max mx-auto justify-start sm:justify-center">
-            {wantToReadBooks.map((book) => (
-              <Book3D
-                key={book.id}
-                book={book}
-                onInspect={onInspectBook}
-                onToggleRead={onToggleRead}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="relative w-full max-w-[96%] mx-auto z-0 -mt-1">
-          <div className="h-2 w-full bg-gradient-to-b from-[#f4f3ef] to-[#ffffff] border-t border-white/60" />
-          <div className="h-3.5 w-full bg-white border-t border-black/[0.04] border-b border-black/[0.08] shelf-shadow" />
-        </div>
-      </div>
-    );
-  }
-
-  // Case 3: Series Shelf (Contains Read books + Want-to-Read books + Missing in the same series!)
-  const { name, author, books, readCount, totalCount, completionPercent } = series;
+  if (items.length === 0) return null;
 
   return (
-    <div className="relative mb-20 animate-fadeIn">
-      {/* Series Header Label above the shelf */}
-      <div className="max-w-7xl mx-auto px-6 sm:px-12 flex items-baseline justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <h3 className="text-sm sm:text-base font-semibold tracking-wider uppercase text-[#1d1d1f]">
-            {name}
-          </h3>
-          <span className="text-xs text-[#86868b] font-normal">
-            &bull; {author}
-          </span>
-        </div>
+    <div className="relative mb-14 sm:mb-16 animate-fadeIn">
+      {/* Scrollable / Responsive Content Container */}
+      <div className="relative w-full overflow-x-auto pb-0 pt-4 px-4 sm:px-8 scrollbar-none">
+        <div className="flex items-end gap-2 sm:gap-3 min-w-max mx-auto justify-start">
+          {items.map((item, itemIdx) => {
+            const isLast = itemIdx === items.length - 1;
 
-        <div className="flex items-center gap-2 text-xs text-[#86868b]">
-          <span className="font-medium text-[#1d1d1f]">{readCount} of {totalCount} Read</span>
-          <span className="text-[11px] font-mono text-[#0071e3]">({completionPercent}%)</span>
+            if (item.type === 'series') {
+              const s = item.data;
+              return (
+                <React.Fragment key={s.id || `series-${itemIdx}`}>
+                  {/* Series Block */}
+                  <div className="flex flex-col flex-shrink-0">
+                    {/* Series Title: Placed at the top starting from the left of the 1st book */}
+                    <div className="flex items-center gap-2 mb-2 pl-0.5 select-none">
+                      <span className="text-[12px] sm:text-[13px] font-semibold text-white/95 tracking-tight truncate max-w-[200px] sm:max-w-[300px]">
+                        {s.name}
+                      </span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 bg-white/10 text-white/70 rounded-full font-normal">
+                        {s.readCount}/{s.totalCount}
+                      </span>
+                      {s.isCompleted && (
+                        <span className="text-[9px] font-medium text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                          Complete
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Books of this Series */}
+                    <div className="flex items-end gap-2.5 sm:gap-3.5">
+                      {s.books.map((book) => (
+                        <Book3D
+                          key={book.id}
+                          book={book}
+                          size={bookSize}
+                          onInspect={onInspectBook}
+                          onToggleRead={onToggleRead}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Elegant Metallic Bookend Gap between different series on same shelf */}
+                  {!isLast && (
+                    <div className="flex flex-col justify-end self-end h-[105px] sm:h-[125px] px-2 sm:px-3 pb-1 select-none">
+                      <div className="w-[3px] h-12 bg-gradient-to-t from-amber-400/50 via-white/20 to-transparent rounded-full shadow-[0_0_8px_rgba(251,191,36,0.3)]" />
+                    </div>
+                  )}
+                </React.Fragment>
+              );
+            }
+
+            if (item.type === 'standalone-group') {
+              const books = item.books || [];
+              const groupTitle = item.title || 'Individual Works';
+
+              return (
+                <React.Fragment key={`standalone-${itemIdx}`}>
+                  {/* Standalone Books Block Sitting in Remaining Space */}
+                  <div className="flex flex-col flex-shrink-0">
+                    {/* Standalone Header starting from left of first book */}
+                    <div className="flex items-center gap-2 mb-2 pl-0.5 select-none">
+                      <span className="text-[12px] sm:text-[13px] font-semibold text-white/70 tracking-tight">
+                        {groupTitle}
+                      </span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 bg-white/10 text-white/50 rounded-full">
+                        {books.length}
+                      </span>
+                    </div>
+
+                    {/* Standalone Books */}
+                    <div className="flex items-end gap-2.5 sm:gap-3.5">
+                      {books.map((book) => (
+                        <Book3D
+                          key={book.id}
+                          book={book}
+                          size={bookSize}
+                          onInspect={onInspectBook}
+                          onToggleRead={onToggleRead}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Bookend Gap if followed by another item */}
+                  {!isLast && (
+                    <div className="flex flex-col justify-end self-end h-[105px] sm:h-[125px] px-2 sm:px-3 pb-1 select-none">
+                      <div className="w-[3px] h-12 bg-gradient-to-t from-amber-400/50 via-white/20 to-transparent rounded-full shadow-[0_0_8px_rgba(251,191,36,0.3)]" />
+                    </div>
+                  )}
+                </React.Fragment>
+              );
+            }
+
+            return null;
+          })}
         </div>
       </div>
 
-      {/* Books Display Area (Resting on the Shelf Ledge) */}
-      <div className="relative w-full overflow-x-auto pb-0 pt-6 px-6 sm:px-12 scrollbar-none">
-        <div className="flex items-end gap-5 sm:gap-7 min-w-max mx-auto justify-start sm:justify-center">
-          {books.map((book) => (
-            <Book3D
-              key={book.id}
-              book={book}
-              onInspect={onInspectBook}
-              onToggleRead={onToggleRead}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Architectural Floating Picture-Ledge Shelf */}
-      <div className="relative w-full max-w-[96%] mx-auto z-0 -mt-1">
-        <div className="h-2 w-full bg-gradient-to-b from-[#f4f3ef] to-[#ffffff] border-t border-white/60" />
-        <div className="h-3.5 w-full bg-white border-t border-black/[0.04] border-b border-black/[0.08] shelf-shadow" />
+      {/* Realistic Floating Dark Architectural Shelf Ledge Underneath Books */}
+      <div className="relative w-full max-w-[98%] mx-auto z-0 -mt-1">
+        {/* Shelf Top Face with Beveled Edge */}
+        <div className="h-2 w-full bg-gradient-to-b from-[#2b2e3a] to-[#1a1c24] border-t border-white/25" />
+        {/* Shelf Front Fascia Rail */}
+        <div className="h-3 w-full shelf-ledge-dark" />
+        {/* Soft Ambient LED Glow Cast onto Black Wall Underneath */}
+        <div className="h-6 w-full shelf-ambient-glow -mt-1 pointer-events-none" />
       </div>
     </div>
   );

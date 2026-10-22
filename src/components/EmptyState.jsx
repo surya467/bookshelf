@@ -63,26 +63,26 @@ export default function EmptyState({ onImportCSV, onLoadDemo }) {
   };
 
   return (
-    <div className="max-w-2xl mx-auto py-12 px-4 animate-fadeIn">
-      <div className="bg-white rounded-[32px] p-8 sm:p-12 border border-black/[0.04] shadow-[0_4px_24px_rgba(0,0,0,0.04)] text-center">
+    <div className="max-w-2xl mx-auto py-12 px-4 animate-fadeIn relative z-10">
+      <div className="bg-[#0f1117]/90 backdrop-blur-2xl rounded-[32px] p-8 sm:p-12 border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.8)] text-center text-white">
         {/* Minimal Icon */}
-        <div className="w-14 h-14 rounded-3xl bg-[#f5f5f7] border border-black/[0.06] flex items-center justify-center mx-auto mb-6 text-[#1d1d1f]">
-          <BookOpen className="w-7 h-7 text-[#1d1d1f]" />
+        <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-6 text-[#0071e3] shadow-inner">
+          <BookOpen className="w-7 h-7" />
         </div>
 
-        <span className="text-xs font-semibold uppercase tracking-wider text-[#0071e3]">
+        <span className="text-xs font-semibold uppercase tracking-wider text-[#0071e3] bg-[#0071e3]/10 px-3 py-1 rounded-full border border-[#0071e3]/20">
           Bookshelf Series Tracker
         </span>
-        <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-[#1d1d1f] mt-1.5">
-          Visualize Your Library
+        <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-white mt-3">
+          Visualize Your Entire Library
         </h2>
-        <p className="text-sm text-[#86868b] mt-2 max-w-lg mx-auto leading-relaxed">
-          Import your Goodreads export to organize your books into complete series. Read books appear in vibrant color; missing companion volumes appear in minimal grey with one-click purchase links.
+        <p className="text-xs sm:text-sm text-white/60 mt-2 max-w-lg mx-auto leading-relaxed">
+          Import your Goodreads export to organize your books into compact, continuous series shelves. Read books appear in vibrant color; missing and want-to-read volumes appear in grey with one-click purchase links.
         </p>
 
         {/* Optional Reader Name Input */}
         <div className="mt-8 max-w-sm mx-auto text-left">
-          <label className="block text-xs font-medium text-[#86868b] mb-1.5 ml-1">
+          <label className="block text-xs font-medium text-white/70 mb-1.5 ml-1">
             Your Name (Optional)
           </label>
           <input
@@ -90,7 +90,7 @@ export default function EmptyState({ onImportCSV, onLoadDemo }) {
             value={userName}
             onChange={(e) => setUserName(e.target.value)}
             placeholder="e.g. Surya"
-            className="w-full bg-[#f5f5f7] border border-black/[0.06] rounded-2xl px-4 py-2.5 text-sm text-[#1d1d1f] placeholder:text-[#86868b]/60 focus:outline-none focus:border-[#0071e3] transition-all"
+            className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#0071e3] transition-all"
           />
         </div>
 
@@ -102,8 +102,8 @@ export default function EmptyState({ onImportCSV, onLoadDemo }) {
           onDrop={handleDrop}
           className={`mt-4 border-2 border-dashed rounded-3xl p-8 sm:p-10 transition-all cursor-pointer relative ${
             dragActive
-              ? 'border-[#0071e3] bg-[#0071e3]/5 scale-[1.01]'
-              : 'border-black/[0.08] hover:border-[#0071e3]/60 bg-[#f5f5f7]/60'
+              ? 'border-[#0071e3] bg-[#0071e3]/10 scale-[1.01]'
+              : 'border-white/15 hover:border-[#0071e3]/60 bg-white/[0.02]'
           }`}
         >
           <input
@@ -112,23 +112,23 @@ export default function EmptyState({ onImportCSV, onLoadDemo }) {
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
             className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
           />
-          <div className="w-12 h-12 rounded-2xl bg-white shadow-sm border border-black/[0.04] flex items-center justify-center mx-auto mb-3 text-[#0071e3]">
-            <Upload className="w-5 h-5 text-[#0071e3]" />
+          <div className="w-12 h-12 rounded-2xl bg-white/10 shadow-sm border border-white/10 flex items-center justify-center mx-auto mb-3 text-[#0071e3]">
+            <Upload className="w-5 h-5" />
           </div>
-          <p className="text-sm font-semibold text-[#1d1d1f]">
+          <p className="text-sm font-semibold text-white">
             Drop your Goodreads CSV here
           </p>
-          <p className="text-xs text-[#86868b] mt-1">
+          <p className="text-xs text-white/50 mt-1">
             or click to browse from your computer
           </p>
         </div>
 
         {error && (
-          <p className="text-xs text-rose-500 mt-3 font-medium">{error}</p>
+          <p className="text-xs text-rose-400 mt-3 font-medium">{error}</p>
         )}
 
         {/* How to export note */}
-        <div className="mt-8 pt-6 border-t border-black/[0.06] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#86868b]">
+        <div className="mt-8 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/50">
           <a
             href="https://www.goodreads.com/review/import"
             target="_blank"
