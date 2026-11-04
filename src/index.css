@@ -10,7 +10,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
-    background-color: #07080d;
+    background-color: #08090d;
     color: #f1f2f6;
     overflow-x: hidden;
   }
@@ -24,39 +24,42 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.2);
     border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.4);
   }
 }
 
-/* Typography Classes */
-.font-editorial {
-  font-family: 'Cinzel', serif;
+/* Typography */
+.font-display {
+  font-family: 'Bebas Neue', sans-serif;
+  letter-spacing: 0.04em;
 }
 
-.font-serif-display {
-  font-family: 'Playfair Display', Georgia, serif;
+.font-impact {
+  font-family: 'Anton', sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.font-editorial {
+  font-family: 'Cinzel', serif;
 }
 
 .font-mono-meta {
   font-family: 'JetBrains Mono', monospace;
 }
 
-/* 3D Perspective & Transform Helpers */
-.perspective-800 {
-  perspective: 800px;
-}
+/* 3D Perspective & Cylindrical Arena Helpers */
 .perspective-1000 {
   perspective: 1000px;
 }
-.perspective-1200 {
-  perspective: 1200px;
+.perspective-1400 {
+  perspective: 1400px;
 }
-.perspective-1600 {
-  perspective: 1600px;
+.perspective-2000 {
+  perspective: 2000px;
 }
 .preserve-3d {
   transform-style: preserve-3d;
@@ -65,59 +68,62 @@
   backface-visibility: hidden;
 }
 
-/* 3D Realistic Dark-Theme Book Shadows & Surfaces */
-.book-3d-dark {
-  box-shadow: 
-    0 1px 1px rgba(255, 255, 255, 0.12) inset,
-    1px 0 0 rgba(255, 255, 255, 0.08) inset,
-    0 3px 8px rgba(0, 0, 0, 0.65),
-    0 8px 20px -2px rgba(0, 0, 0, 0.85);
+/* Collectible Plastic Mylar Sleeve Sheen */
+.mylar-sleeve {
+  position: relative;
+  overflow: hidden;
+}
+.mylar-sleeve::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    transparent 35%,
+    rgba(255, 255, 255, 0.12) 42%,
+    rgba(255, 255, 255, 0.25) 45%,
+    rgba(255, 255, 255, 0.08) 48%,
+    transparent 55%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 15;
+  mix-blend-mode: overlay;
 }
 
-.book-3d-dark-hover {
-  box-shadow: 
-    0 2px 2px rgba(255, 255, 255, 0.22) inset,
-    1px 0 0 rgba(255, 255, 255, 0.14) inset,
-    0 12px 28px rgba(0, 0, 0, 0.8),
-    0 24px 44px -4px rgba(0, 0, 0, 0.95);
+/* Comic / Manga Corner Tape Accent (from Image 3) */
+.tape-corner {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 48px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(2px);
+  transform: rotate(45deg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  z-index: 30;
+  pointer-events: none;
+  border: 1px dashed rgba(255, 255, 255, 0.5);
 }
 
-/* Architectural Dark Walnut / Titanium Shelf Ledges */
-.dark-shelf-ledge {
-  background: linear-gradient(180deg, #1c1d25 0%, #13141b 45%, #0a0b10 100%);
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.7),
-    0 10px 24px -2px rgba(0, 0, 0, 0.9);
+/* Torn Paper Edge (Comic Verse bottom divider from Image 3) */
+.torn-paper-edge {
+  position: relative;
+  width: 100%;
+  height: 28px;
+  background-color: #08090d;
+  background-image: 
+    linear-gradient(135deg, #101118 25%, transparent 25%),
+    linear-gradient(225deg, #101118 25%, transparent 25%);
+  background-size: 24px 28px;
+  background-position: 0 0;
 }
 
-/* Gold Foil Spine Typography Glow */
-.gold-foil-text {
-  background: linear-gradient(135deg, #f7dfa5 0%, #d4af37 50%, #aa771c 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
-}
-
-.silver-foil-text {
-  background: linear-gradient(135deg, #ffffff 0%, #cfd5e1 50%, #94a3b8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
-}
-
-/* Acrylic Jewel Track Reflection */
-.acrylic-track-surface {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0.04) 100%);
-  box-shadow: 
-    0 1px 0 rgba(255, 255, 255, 0.25) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.6) inset,
-    0 12px 30px rgba(0, 0, 0, 0.7);
-}
-
-/* Glassmorphic Dock */
+/* Glassmorphic Floating Dock */
 .glass-dock {
-  background: rgba(18, 20, 29, 0.78);
+  background: rgba(14, 16, 24, 0.82);
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -126,18 +132,28 @@
     0 0 0 1px rgba(255, 255, 255, 0.05) inset;
 }
 
+/* Collectible Card Glow */
+.card-collectible {
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.7);
+}
+.card-collectible:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 20px 45px -8px rgba(0, 0, 0, 0.85), 0 0 25px rgba(0, 113, 227, 0.25);
+}
+
 /* Search Pulse Glow */
 @keyframes bookPulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(0, 113, 227, 0.95);
+    box-shadow: 0 0 0 0 rgba(255, 45, 85, 0.95);
     transform: scale(1.08) translateY(-6px);
   }
   30% {
-    box-shadow: 0 0 35px 8px rgba(0, 113, 227, 0.7);
+    box-shadow: 0 0 40px 10px rgba(255, 45, 85, 0.8);
     transform: scale(1.08) translateY(-6px);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(0, 113, 227, 0);
+    box-shadow: 0 0 0 0 rgba(255, 45, 85, 0);
     transform: scale(1) translateY(0);
   }
 }
@@ -145,15 +161,15 @@
 .book-search-pulse {
   animation: bookPulse 2s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
   z-index: 50 !important;
-  outline: 2px solid #0071e3 !important;
-  outline-offset: 3px !important;
+  outline: 2px solid #ff2d55 !important;
+  outline-offset: 4px !important;
 }
 
 /* Animations */
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -162,19 +178,5 @@
 }
 
 .animate-fadeIn {
-  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* Shimmer animation for loading states */
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-.animate-shimmer {
-  animation: shimmer 1.8s infinite;
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

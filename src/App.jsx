@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import confetti from 'canvas-confetti';
-import { BookOpen, Bookmark } from 'lucide-react';
 import Navbar from './components/Navbar';
-import WallShelf from './components/WallShelf';
-import Hero3DStack from './components/Hero3DStack';
-import Jewel3DRail from './components/Jewel3DRail';
+import ComicVerseHeroHeader from './components/ComicVerseHeroHeader';
+import ComicVerseCatalog from './components/ComicVerseCatalog';
+import CylindricalArena3D from './components/CylindricalArena3D';
+import StaggeredPanels from './components/StaggeredPanels';
+import ComicVerseFooter from './components/ComicVerseFooter';
 import InteractiveDock from './components/InteractiveDock';
-import StatsHeader from './components/StatsHeader';
 import AmbientCanvas from './components/AmbientCanvas';
 import BookDetailModal from './components/BookDetailModal';
 import ImportModal from './components/ImportModal';
@@ -28,7 +28,7 @@ const DEMO_SAMPLE_CSV = `Book Id,Title,Author,Author l-f,Additional Authors,ISBN
 
 const STORAGE_KEY_DATA = 'bookshelf_library_v4';
 const STORAGE_KEY_NAME = 'bookshelf_user_name_v4';
-const STORAGE_KEY_VIEW = 'bookshelf_view_mode_v4';
+const STORAGE_KEY_VIEW = 'bookshelf_view_mode_v5';
 
 const getStoredApiKeys = () => {
   try {
@@ -42,142 +42,6 @@ const getStoredApiKeys = () => {
 function cleanForMatch(str) {
   if (!str) return '';
   return str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
-}
-
-/**
- * Intelligent Responsive Width-Based Shelf Packing Algorithm:
- * - Computes physical pixel footprint of books, gaps, dividers, and titles.
- * - Dynamically adapts to the user's screen width so books never get cut off on the right.
- * - Long series that exceed shelf width are gracefully split into sequential shelf rows (e.g. 'Series (cont.)').
- * - Smaller series share shelves, with remaining gaps filled by single/wishlist editions.
- */
-function packBookshelfResponsive(seriesList, standaloneBooks, wantToReadStandalone = [], containerWidth = 1200, bookSize = 'default') {
-  const isCompact = bookSize === 'compact';
-  const isSmallScreen = containerWidth < 640;
-  const isMediumScreen = containerWidth < 768;
-
-  let bookW = 86;
-  let bookGap = 10;
-  let dividerW = 22;
-
-  if (isCompact) {
-    bookW = isSmallScreen ? 58 : isMediumScreen ? 68 : 74;
-    bookGap = 8;
-    dividerW = 18;
-  } else {
-    bookW = isSmallScreen ? 68 : isMediumScreen ? 78 : 86;
-    bookGap = 10;
-    dividerW = 22;
-  }
-
-  // Safe usable width with buffer for padding & right bookcase rail
-  const usableW = Math.max(280, containerWidth - 48);
-
-  function getSeriesWidth(numBooks) {
-    if (numBooks <= 0) return 0;
-    const booksW = (numBooks * bookW) + ((numBooks - 1) * bookGap);
-    return Math.max(booksW, numBooks === 1 ? 115 : 0);
-  }
-
-  const maxBooksOnEmptyShelf = Math.max(1, Math.floor((usableW + bookGap) / (bookW + bookGap)));
-
-  // Pre-process: Chunk any series that has more books than physical shelf width
-  const chunkedSeriesList = [];
-  for (const s of seriesList) {
-    if (s.books.length <= maxBooksOnEmptyShelf) {
-      chunkedSeriesList.push(s);
-    } else {
-      let offset = 0;
-      let part = 1;
-      while (offset < s.books.length) {
-        const chunk = s.books.slice(offset, offset + maxBooksOnEmptyShelf);
-        chunkedSeriesList.push({
-          ...s,
-          id: `${s.id}-part-${part}`,
-          name: part === 1 ? s.name : `${s.name} (cont.)`,
-          books: chunk,
-          readCount: chunk.filter((b) => b.isRead).length,
-          totalCount: chunk.length,
-          isCompleted: chunk.every((b) => b.isRead),
-        });
-        offset += maxBooksOnEmptyShelf;
-        part++;
-      }
-    }
-  }
-
-  const shelves = [];
-  let currentShelfItems = [];
-  let currentShelfWidth = 0;
-
-  const allSingleBooks = [
-    ...(standaloneBooks || []),
-    ...(wantToReadStandalone || []),
-  ];
-  let singleBooksQueue = [...allSingleBooks];
-
-  for (const series of chunkedSeriesList) {
-    const seriesW = getSeriesWidth(series.books.length);
-    const neededW = currentShelfItems.length > 0 ? dividerW + seriesW : seriesW;
-
-    if (currentShelfWidth + neededW <= usableW) {
-      currentShelfItems.push({ type: 'series', data: series });
-      currentShelfWidth += neededW;
-    } else {
-      const remainingW = usableW - currentShelfWidth;
-      const neededForSinglesDivider = currentShelfItems.length > 0 ? dividerW : 0;
-      const availForSingles = remainingW - neededForSinglesDivider;
-      const singleSlots = Math.max(0, Math.floor((availForSingles + bookGap) / (bookW + bookGap)));
-
-      if (singleSlots > 0 && singleBooksQueue.length > 0) {
-        const fillBooks = singleBooksQueue.splice(0, singleSlots);
-        const fillW = getSeriesWidth(fillBooks.length);
-        currentShelfItems.push({
-          type: 'standalone-group',
-          title: 'Single Editions',
-          books: fillBooks,
-        });
-        currentShelfWidth += neededForSinglesDivider + fillW;
-      }
-
-      if (currentShelfItems.length > 0) {
-        shelves.push(currentShelfItems);
-      }
-
-      currentShelfItems = [{ type: 'series', data: series }];
-      currentShelfWidth = seriesW;
-    }
-  }
-
-  while (singleBooksQueue.length > 0) {
-    const remainingW = usableW - currentShelfWidth;
-    const neededForSinglesDivider = currentShelfItems.length > 0 ? dividerW : 0;
-    const availForSingles = remainingW - neededForSinglesDivider;
-    const singleSlots = Math.max(0, Math.floor((availForSingles + bookGap) / (bookW + bookGap)));
-
-    if (singleSlots > 0) {
-      const fillBooks = singleBooksQueue.splice(0, singleSlots);
-      const fillW = getSeriesWidth(fillBooks.length);
-      currentShelfItems.push({
-        type: 'standalone-group',
-        title: currentShelfItems.length === 0 ? 'Individual Works & Wishlist' : 'Single Editions',
-        books: fillBooks,
-      });
-      currentShelfWidth += neededForSinglesDivider + fillW;
-    }
-
-    if (singleBooksQueue.length > 0 || currentShelfItems.length > 0) {
-      shelves.push(currentShelfItems);
-      currentShelfItems = [];
-      currentShelfWidth = 0;
-    }
-  }
-
-  if (currentShelfItems.length > 0) {
-    shelves.push(currentShelfItems);
-  }
-
-  return shelves;
 }
 
 export default function App() {
@@ -197,71 +61,31 @@ export default function App() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingBookCount, setLoadingBookCount] = useState(0);
-  const [bookSize, setBookSize] = useState('default'); // 'compact' | 'default'
 
-  // View Mode: 'shelves' | 'stack' (Pinterest Pin 2) | 'rail' (Pinterest Pin 3)
-  const [viewMode, setViewMode] = useState('shelves');
+  // View Mode: 'catalog' (Image 3) | 'arena' (Image 2) | 'panels' (Image 1)
+  const [viewMode, setViewMode] = useState('catalog');
 
-  // Tab State: 'library' (My Library) vs 'wantToRead' (Want to Read Shelf)
-  const [activeTab, setActiveTab] = useState('library');
+  // Filter State: 'all' | 'read' | 'tbr' | 'completed' | 'missing'
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Dynamic Shelf Container Width via ResizeObserver
-  const shelfContainerRef = useRef(null);
-  const [containerWidth, setContainerWidth] = useState(
-    typeof window !== 'undefined' ? Math.min(window.innerWidth - 48, 1260) : 1200
-  );
-
-  // Non-clipping Global Tooltip Hover State
+  // Tooltip & Modals
   const [activeHover, setActiveHover] = useState(null);
-
-  // Modals
   const [selectedBook, setSelectedBook] = useState(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isOpenLibraryInfoOpen, setIsOpenLibraryInfoOpen] = useState(false);
 
-  // Keyboard shortcut listener: 1, 2, 3 to switch views; / to search
+  // Keyboard shortcut listener: 1: Catalog, 2: 3D Arena, 3: Panels
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      if (e.key === '1') setViewMode('shelves');
-      if (e.key === '2') setViewMode('stack');
-      if (e.key === '3') setViewMode('rail');
+      if (e.key === '1') setViewMode('catalog');
+      if (e.key === '2') setViewMode('arena');
+      if (e.key === '3') setViewMode('panels');
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  // Measure shelf width dynamically
-  useEffect(() => {
-    const el = shelfContainerRef.current;
-    const updateWidth = () => {
-      const w = el ? el.clientWidth : window.innerWidth - 48;
-      if (w > 0) {
-        setContainerWidth(Math.min(w, 1260));
-      }
-    };
-
-    updateWidth();
-
-    let ro = null;
-    if (el && typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          const w = entry.contentRect.width;
-          if (w > 0) {
-            setContainerWidth(Math.min(w, 1260));
-          }
-        }
-      });
-      ro.observe(el);
-    }
-
-    window.addEventListener('resize', updateWidth);
-    return () => {
-      if (ro) ro.disconnect();
-      window.removeEventListener('resize', updateWidth);
-    };
-  }, [seriesList.length, standaloneBooks.length, activeTab, viewMode]);
 
   // Check localStorage on mount
   useEffect(() => {
@@ -328,10 +152,10 @@ export default function App() {
     if (willBeRead) {
       soundFX.playUnlock();
       confetti({
-        particleCount: 45,
-        spread: 55,
+        particleCount: 50,
+        spread: 60,
         origin: { y: 0.65 },
-        colors: ['#0071e3', '#34c759', '#ffffff'],
+        colors: ['#ff2d55', '#34c759', '#ffffff'],
       });
     } else {
       soundFX.playClick();
@@ -473,9 +297,7 @@ export default function App() {
       setStandaloneBooks(resolved.standaloneBooks);
       setWantToReadStandalone(resolved.wantToReadStandalone || []);
       setStats(resolved.stats);
-      if (newName) {
-        setUserName(newName);
-      }
+      if (newName) setUserName(newName);
 
       persistState(resolved.seriesList, resolved.standaloneBooks, resolved.wantToReadStandalone || [], resolved.stats, newName);
 
@@ -485,7 +307,7 @@ export default function App() {
           particleCount: 50,
           spread: 55,
           origin: { y: 0.65 },
-          colors: ['#0071e3', '#34c759', '#ffffff'],
+          colors: ['#ff2d55', '#34c759', '#ffffff'],
         });
       }, 450);
 
@@ -541,126 +363,52 @@ export default function App() {
     await handleImportCSV(parsed, name);
   };
 
-  const handleHoverStart = useCallback((book, rect) => {
-    setActiveHover({ book, rect });
-  }, []);
-
-  const handleHoverEnd = useCallback(() => {
-    setActiveHover(null);
-  }, []);
-
   const hasData = seriesList.length > 0 || standaloneBooks.length > 0 || wantToReadStandalone.length > 0;
 
-  // 1. ACTIVE SERIES: Series where AT LEAST ONE book has been read!
-  const activeSeries = useMemo(() => {
-    return seriesList.filter((s) => s.books.some((b) => b.isRead));
-  }, [seriesList]);
+  // Filter books by searchQuery if typed
+  const filteredSeries = useMemo(() => {
+    if (!searchQuery.trim()) return seriesList;
+    const q = searchQuery.toLowerCase().trim();
+    return seriesList.map((s) => ({
+      ...s,
+      books: s.books.filter((b) =>
+        b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q)
+      ),
+    })).filter((s) => s.books.length > 0);
+  }, [seriesList, searchQuery]);
 
-  // 2. UNSTARTED WANT-TO-READ SERIES: 0 books read, but contains want-to-read books!
-  const wantToReadSeries = useMemo(() => {
-    return seriesList
-      .filter((s) => !s.books.some((b) => b.isRead))
-      .filter((s) => s.books.some((b) => b.isWantToRead));
-  }, [seriesList]);
+  const filteredStandalone = useMemo(() => {
+    if (!searchQuery.trim()) return standaloneBooks;
+    const q = searchQuery.toLowerCase().trim();
+    return standaloneBooks.filter((b) =>
+      b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q)
+    );
+  }, [standaloneBooks, searchQuery]);
 
-  // 3. READ STANDALONE BOOKS
-  const readStandalone = useMemo(() => {
-    return standaloneBooks.filter((b) => b.isRead);
-  }, [standaloneBooks]);
+  const filteredWantToRead = useMemo(() => {
+    if (!searchQuery.trim()) return wantToReadStandalone;
+    const q = searchQuery.toLowerCase().trim();
+    return wantToReadStandalone.filter((b) =>
+      b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q)
+    );
+  }, [wantToReadStandalone, searchQuery]);
 
-  // 4. UNREAD WANT-TO-READ STANDALONE BOOKS
-  const tbrStandalone = useMemo(() => {
-    const fromStandalone = standaloneBooks.filter((b) => !b.isRead && b.isWantToRead);
-    const fromWantToRead = wantToReadStandalone.filter((b) => !b.isRead);
-    const seen = new Set();
-    const result = [];
-    for (const b of [...fromStandalone, ...fromWantToRead]) {
-      const key = b.id || cleanForMatch(b.title);
-      if (!seen.has(key)) {
-        seen.add(key);
-        result.push(b);
-      }
-    }
-    return result;
-  }, [standaloneBooks, wantToReadStandalone]);
-
-  // Total counts for tab badges
-  const libraryBookCount = useMemo(() => {
-    let count = readStandalone.length;
-    activeSeries.forEach((s) => {
-      count += s.books.length;
-    });
-    return count;
-  }, [activeSeries, readStandalone]);
-
-  const wantToReadBookCount = useMemo(() => {
-    let count = tbrStandalone.length;
-    wantToReadSeries.forEach((s) => {
-      count += s.books.length;
-    });
-    return count;
-  }, [wantToReadSeries, tbrStandalone]);
-
-  // Compute dynamically packed shelves based on active tab
-  const packedShelves = useMemo(() => {
-    if (activeTab === 'library') {
-      return packBookshelfResponsive(
-        activeSeries,
-        readStandalone,
-        [],
-        containerWidth,
-        bookSize
-      );
-    } else {
-      return packBookshelfResponsive(
-        wantToReadSeries,
-        tbrStandalone,
-        [],
-        containerWidth,
-        bookSize
-      );
-    }
-  }, [activeTab, activeSeries, readStandalone, wantToReadSeries, tbrStandalone, containerWidth, bookSize]);
-
-  // Seamless Search selection: auto-switches to the appropriate tab if needed
   const handleSelectBook = (book) => {
     if (!book) return;
     setSelectedBook(book);
-
-    const isInActiveSeries = activeSeries.some((s) =>
-      s.books.some((b) => String(b.id) === String(book.id) || cleanForMatch(b.title) === cleanForMatch(book.title))
-    );
-    const isRead = !!book.isRead;
-
-    if (!isRead && !isInActiveSeries) {
-      setActiveTab('wantToRead');
-    } else {
-      setActiveTab('library');
-    }
-
-    setTimeout(() => {
-      const el = document.getElementById(`book-${book.id}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('book-search-pulse');
-        setTimeout(() => el.classList.remove('book-search-pulse'), 2200);
-      }
-    }, 180);
   };
 
   return (
-    <div className="min-h-screen flex flex-col font-sans selection:bg-[#0071e3] selection:text-white relative bg-[#07080d] text-neutral-100 overflow-x-hidden">
-      {/* Living Atmospheric Library Dust & Light Aura */}
+    <div className="min-h-screen flex flex-col font-sans selection:bg-[#ff2d55] selection:text-white relative bg-[#08090d] text-neutral-100 overflow-x-hidden">
+      {/* Living Atmospheric Dust & Dynamic Lighting */}
       <AmbientCanvas />
 
       {/* Global Fixed Non-Clipping Tooltip */}
       <GlobalBookTooltip activeHover={activeHover} isNight={true} />
 
-      {/* Apple-level Refined Navbar with Instant Search */}
+      {/* High-Contrast Comic Verse Header */}
       <Navbar
         userName={userName}
-        onUpdateUserName={handleUpdateUserName}
-        stats={stats}
         onOpenImport={() => setIsImportOpen(true)}
         onResetLibrary={handleResetLibrary}
         onOpenOpenLibraryInfo={() => setIsOpenLibraryInfoOpen(true)}
@@ -671,8 +419,8 @@ export default function App() {
         onSelectBook={handleSelectBook}
       />
 
-      {/* Main Bookshelf Area */}
-      <main className="flex-1 w-full pt-4 pb-28 relative z-10">
+      {/* Main Content Area */}
+      <main className="flex-1 w-full pt-2 pb-24 relative z-10">
         {/* Animated Sorting Loader */}
         {isLoading && (
           <SortingBooksLoader totalBooks={loadingBookCount} />
@@ -686,142 +434,53 @@ export default function App() {
           />
         )}
 
-        {/* Loaded Shelves & Views Area */}
+        {/* Loaded Vault & Visual Modes */}
         {!isLoading && hasData && (
           <div className="w-full">
-            {/* Dark Luxury Editorial Stats Codex */}
-            <StatsHeader
+            {/* Comic Verse Hero Header (Giant CATALOG Headline & Filter Bar from Image 3) */}
+            <ComicVerseHeroHeader
               stats={stats}
               userName={userName}
               onUpdateUserName={handleUpdateUserName}
-              onResetLibrary={handleResetLibrary}
+              activeFilter={activeFilter}
+              onChangeFilter={(f) => setActiveFilter(f)}
+              searchQuery={searchQuery}
+              onSearchChange={(q) => setSearchQuery(q)}
             />
 
-            {/* Elegant Tab Switcher: My Library vs Want to Read */}
-            <div className="flex items-center justify-between flex-wrap gap-3 max-w-[1260px] mx-auto px-3 sm:px-6 mb-5 select-none">
-              <div className="inline-flex items-center p-1 rounded-full bg-white/[0.04] border border-white/10 backdrop-blur-2xl shadow-lg">
-                <button
-                  onClick={() => {
-                    soundFX.playClick();
-                    setActiveTab('library');
-                  }}
-                  className={`flex items-center gap-2 px-4 sm:px-6 py-2 rounded-full text-xs font-semibold tracking-tight transition-all ${
-                    activeTab === 'library'
-                      ? 'bg-[#0071e3] text-white shadow-[0_2px_12px_rgba(0,113,227,0.5)]'
-                      : 'text-neutral-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span>My Library</span>
-                  <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                    activeTab === 'library' ? 'bg-black/30 text-white' : 'bg-white/10 text-neutral-400'
-                  }`}>
-                    {libraryBookCount}
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    soundFX.playClick();
-                    setActiveTab('wantToRead');
-                  }}
-                  className={`flex items-center gap-2 px-4 sm:px-6 py-2 rounded-full text-xs font-semibold tracking-tight transition-all ${
-                    activeTab === 'wantToRead'
-                      ? 'bg-[#0071e3] text-white shadow-[0_2px_12px_rgba(0,113,227,0.5)]'
-                      : 'text-neutral-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <Bookmark className="w-3.5 h-3.5" />
-                  <span>Want to Read</span>
-                  <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                    activeTab === 'wantToRead' ? 'bg-black/30 text-white' : 'bg-white/10 text-neutral-400'
-                  }`}>
-                    {wantToReadBookCount}
-                  </span>
-                </button>
-              </div>
-
-              {/* Informative Sub-caption */}
-              <div className="text-[11px] text-neutral-400 hidden sm:block font-mono">
-                {activeTab === 'library' ? (
-                  <span>Showing <strong>read tomes</strong> & <strong>active series</strong> companions</span>
-                ) : (
-                  <span>Showing your <strong>unstarted wishlist series</strong> & <strong>TBR books</strong></span>
-                )}
-              </div>
-            </div>
-
-            {/* Empty State for Want to Read Tab if user has 0 TBR books */}
-            {activeTab === 'wantToRead' && wantToReadBookCount === 0 && (
-              <div className="max-w-md mx-auto py-16 px-4 text-center animate-fadeIn">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4 text-amber-400">
-                  <Bookmark className="w-6 h-6" />
-                </div>
-                <h3 className="font-editorial text-base font-bold text-white">Your Want to Read Shelf is Empty</h3>
-                <p className="text-xs text-neutral-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
-                  Books or unstarted series you mark as "Want to Read" in Goodreads will be collected right here on this shelf.
-                </p>
-                <button
-                  onClick={() => setActiveTab('library')}
-                  className="mt-5 text-xs text-[#0071e3] hover:text-[#0077ed] font-medium"
-                >
-                  ← Return to My Library
-                </button>
-              </div>
-            )}
-
-            {/* VIEW MODE 1: ARCHITECTURAL WALL SHELVES */}
-            {viewMode === 'shelves' && (activeTab === 'library' || wantToReadBookCount > 0) && (
-              <div
-                ref={shelfContainerRef}
-                className="w-full max-w-[1260px] mx-auto px-3 sm:px-6 relative"
-              >
-                {/* Shelf Stack Unit Frame */}
-                <div className="relative w-full">
-                  {/* Left Upright Frame Rail */}
-                  <div className="absolute -left-2 sm:-left-3 top-0 bottom-0 w-2.5 sm:w-3.5 rounded-sm bg-gradient-to-r from-[#12131a] to-[#20222d] border-r border-white/10 shadow-lg z-10 pointer-events-none" />
-
-                  {/* Right Upright Frame Rail */}
-                  <div className="absolute -right-2 sm:-right-3 top-0 bottom-0 w-2.5 sm:w-3.5 rounded-sm bg-gradient-to-l from-[#12131a] to-[#20222d] border-l border-white/10 shadow-lg z-10 pointer-events-none" />
-
-                  {/* Continuous Shelves Stack */}
-                  <div className="w-full">
-                    {packedShelves.map((shelfItems, shelfIndex) => (
-                      <WallShelf
-                        key={`shelf-${activeTab}-${shelfIndex}`}
-                        shelfItems={shelfItems}
-                        bookSize={bookSize}
-                        onInspectBook={(book) => setSelectedBook(book)}
-                        onToggleRead={handleToggleRead}
-                        onHoverStart={handleHoverStart}
-                        onHoverEnd={handleHoverEnd}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* VIEW MODE 2: 3D PERSPECTIVE SLAB STACK (Pinterest Pin 2 & Pin 1) */}
-            {viewMode === 'stack' && (activeTab === 'library' || wantToReadBookCount > 0) && (
-              <Hero3DStack
-                seriesList={seriesList}
-                standaloneBooks={standaloneBooks}
-                wantToReadStandalone={wantToReadStandalone}
-                activeTab={activeTab}
-                onInspectBook={(book) => setSelectedBook(book)}
+            {/* VIEW MODE 1: COLLECTIBLE CATALOG GRID (Reference Image 3) */}
+            {viewMode === 'catalog' && (
+              <ComicVerseCatalog
+                seriesList={filteredSeries}
+                standaloneBooks={filteredStandalone}
+                wantToReadStandalone={filteredWantToRead}
+                activeFilter={activeFilter}
+                onChangeFilter={(f) => setActiveFilter(f)}
+                onInspectBook={handleSelectBook}
                 onToggleRead={handleToggleRead}
               />
             )}
 
-            {/* VIEW MODE 3: 3D DIAGONAL ACRYLIC JEWEL RAIL (Pinterest Pin 3) */}
-            {viewMode === 'rail' && (activeTab === 'library' || wantToReadBookCount > 0) && (
-              <Jewel3DRail
-                seriesList={seriesList}
-                standaloneBooks={standaloneBooks}
-                wantToReadStandalone={wantToReadStandalone}
-                activeTab={activeTab}
-                onInspectBook={(book) => setSelectedBook(book)}
+            {/* VIEW MODE 2: 3D CYLINDRICAL ARENA (Reference Image 2) */}
+            {viewMode === 'arena' && (
+              <CylindricalArena3D
+                seriesList={filteredSeries}
+                standaloneBooks={filteredStandalone}
+                wantToReadStandalone={filteredWantToRead}
+                activeFilter={activeFilter}
+                onInspectBook={handleSelectBook}
+                onToggleRead={handleToggleRead}
+              />
+            )}
+
+            {/* VIEW MODE 3: STAGGERED CHAPTER PANELS (Reference Image 1) */}
+            {viewMode === 'panels' && (
+              <StaggeredPanels
+                seriesList={filteredSeries}
+                standaloneBooks={filteredStandalone}
+                wantToReadStandalone={filteredWantToRead}
+                activeFilter={activeFilter}
+                onInspectBook={handleSelectBook}
                 onToggleRead={handleToggleRead}
               />
             )}
@@ -834,20 +493,13 @@ export default function App() {
         <InteractiveDock
           viewMode={viewMode}
           onChangeViewMode={handleSetViewMode}
-          bookSize={bookSize}
-          onChangeBookSize={(sz) => setBookSize(sz)}
         />
       )}
 
-      {/* Clean Dark Footer */}
-      <footer className="w-full py-6 text-center text-xs text-neutral-500 border-t border-white/[0.06] mt-auto relative z-10 select-none">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span className="font-editorial text-xs">{userName ? `${userName}'s Bibliotheca` : 'Bookshelf Codex'} &bull; {stats.totalRead} Tomes Archived</span>
-          <span className="text-[11px] text-neutral-600 font-mono">Press 1: Shelves &bull; 2: 3D Stack &bull; 3: Jewel Rail</span>
-        </div>
-      </footer>
+      {/* Comic Verse Distressed Paper Separator & Giant Bold Footer (Reference Image 3) */}
+      <ComicVerseFooter stats={stats} userName={userName} />
 
-      {/* Interactive 3D Turntable Modal */}
+      {/* 360° Interactive Turntable Dossier Modal */}
       {selectedBook && (
         <BookDetailModal
           book={selectedBook}
