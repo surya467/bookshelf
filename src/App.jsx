@@ -3,6 +3,11 @@ import confetti from 'canvas-confetti';
 import { BookOpen, Bookmark } from 'lucide-react';
 import Navbar from './components/Navbar';
 import WallShelf from './components/WallShelf';
+import Hero3DStack from './components/Hero3DStack';
+import Jewel3DRail from './components/Jewel3DRail';
+import InteractiveDock from './components/InteractiveDock';
+import StatsHeader from './components/StatsHeader';
+import AmbientCanvas from './components/AmbientCanvas';
 import BookDetailModal from './components/BookDetailModal';
 import ImportModal from './components/ImportModal';
 import OpenLibraryInfoModal from './components/OpenLibraryInfoModal';
@@ -15,7 +20,7 @@ import { enrichCoversInBackground } from './services/openLibrary';
 import { soundFX } from './services/soundFx';
 
 const DEMO_SAMPLE_CSV = `Book Id,Title,Author,Author l-f,Additional Authors,ISBN,ISBN13,My Rating,Publisher,Binding,Number of Pages,Year Published,Original Publication Year,Date Read,Date Added,Bookshelves,Bookshelves with positions,Exclusive Shelf,My Review,Spoiler,Private Notes,Read Count,Owned Copies
-20698371,"Harry Potter and the Chamber of Secrets: Selected Themes from the Motion Picture - Piano Solos: Piano Solos (Includes Souvenir Poster), Book & Poster",John   Williams,"Williams, John",,"=""0739082671""","=""9780739082676""",5.0,Alfred Publishing Co - eBooks Account,Kindle Edition,68,2011,2002,,2026/09/30,,,read,,,,1,0
+20698371,"Harry Potter and the Chamber of Secrets: Selected Themes from the Motion Picture - Piano Solos: Piano Solos (Includes Souvenir Poster), Book & Poster",John Williams,"Williams, John",,"=""0739082671""","=""9780739082676""",5.0,Alfred Publishing Co - eBooks Account,Kindle Edition,68,2011,2002,,2026/09/30,,,read,,,,1,0
 5907,"The Hobbit, or There and Back Again",J.R.R. Tolkien,"Tolkien, J.R.R.","Douglas A. Anderson, Michael Hague, Jemima Catlin","=""""","=""""",5.0,Houghton Mifflin,Paperback,366,2002,1937,,2026/09/30,,,read,,,,1,0
 42844155,"Harry Potter and the Philosopher's Stone (Harry Potter, #1)",J.K. Rowling,"Rowling, J.K.",Olly Moss,"=""""","=""""",5.0,Pottermore Publishing,Kindle Edition,333,2015,1997,,2026/09/30,,,read,,,,1,0
 239754337,"Harry Potter and the Chamber of Secrets (Harry Potter, #2)",J.K. Rowling,"Rowling, J.K.","Hugh Laurie, Matthew MacFadyen, Kit Harington, Riz Ahmed, Michelle Gomez, Daniel Mays, Mark Addy, Simon Pegg, Cush Jumbo, Alex Hassell, Gemma Whelan, Indira Varma, Frankie Treadaway, Max Lester, Arabella Stanton","=""""","=""""",5.0,Pottermore Publishing and Audible Studios,Audiobook,10,2025,1998,,2026/09/30,,,read,,,,1,0
@@ -23,6 +28,7 @@ const DEMO_SAMPLE_CSV = `Book Id,Title,Author,Author l-f,Additional Authors,ISBN
 
 const STORAGE_KEY_DATA = 'bookshelf_library_v4';
 const STORAGE_KEY_NAME = 'bookshelf_user_name_v4';
+const STORAGE_KEY_VIEW = 'bookshelf_view_mode_v4';
 
 const getStoredApiKeys = () => {
   try {
@@ -50,7 +56,7 @@ function packBookshelfResponsive(seriesList, standaloneBooks, wantToReadStandalo
   const isSmallScreen = containerWidth < 640;
   const isMediumScreen = containerWidth < 768;
 
-  let bookW = 84;
+  let bookW = 86;
   let bookGap = 10;
   let dividerW = 22;
 
@@ -59,7 +65,7 @@ function packBookshelfResponsive(seriesList, standaloneBooks, wantToReadStandalo
     bookGap = 8;
     dividerW = 18;
   } else {
-    bookW = isSmallScreen ? 66 : isMediumScreen ? 76 : 84;
+    bookW = isSmallScreen ? 68 : isMediumScreen ? 78 : 86;
     bookGap = 10;
     dividerW = 22;
   }
@@ -70,7 +76,6 @@ function packBookshelfResponsive(seriesList, standaloneBooks, wantToReadStandalo
   function getSeriesWidth(numBooks) {
     if (numBooks <= 0) return 0;
     const booksW = (numBooks * bookW) + ((numBooks - 1) * bookGap);
-    // Single books have title minimum width of ~115px
     return Math.max(booksW, numBooks === 1 ? 115 : 0);
   }
 
@@ -105,14 +110,12 @@ function packBookshelfResponsive(seriesList, standaloneBooks, wantToReadStandalo
   let currentShelfItems = [];
   let currentShelfWidth = 0;
 
-  // Single books pool
   const allSingleBooks = [
     ...(standaloneBooks || []),
     ...(wantToReadStandalone || []),
   ];
   let singleBooksQueue = [...allSingleBooks];
 
-  // Pack series onto shelves based on physical width
   for (const series of chunkedSeriesList) {
     const seriesW = getSeriesWidth(series.books.length);
     const neededW = currentShelfItems.length > 0 ? dividerW + seriesW : seriesW;
@@ -146,7 +149,6 @@ function packBookshelfResponsive(seriesList, standaloneBooks, wantToReadStandalo
     }
   }
 
-  // Pack any remaining single books across subsequent shelves
   while (singleBooksQueue.length > 0) {
     const remainingW = usableW - currentShelfWidth;
     const neededForSinglesDivider = currentShelfItems.length > 0 ? dividerW : 0;
@@ -197,6 +199,9 @@ export default function App() {
   const [loadingBookCount, setLoadingBookCount] = useState(0);
   const [bookSize, setBookSize] = useState('default'); // 'compact' | 'default'
 
+  // View Mode: 'shelves' | 'stack' (Pinterest Pin 2) | 'rail' (Pinterest Pin 3)
+  const [viewMode, setViewMode] = useState('shelves');
+
   // Tab State: 'library' (My Library) vs 'wantToRead' (Want to Read Shelf)
   const [activeTab, setActiveTab] = useState('library');
 
@@ -213,6 +218,18 @@ export default function App() {
   const [selectedBook, setSelectedBook] = useState(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isOpenLibraryInfoOpen, setIsOpenLibraryInfoOpen] = useState(false);
+
+  // Keyboard shortcut listener: 1, 2, 3 to switch views; / to search
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === '1') setViewMode('shelves');
+      if (e.key === '2') setViewMode('stack');
+      if (e.key === '3') setViewMode('rail');
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Measure shelf width dynamically
   useEffect(() => {
@@ -244,15 +261,17 @@ export default function App() {
       if (ro) ro.disconnect();
       window.removeEventListener('resize', updateWidth);
     };
-  }, [seriesList.length, standaloneBooks.length, activeTab]);
+  }, [seriesList.length, standaloneBooks.length, activeTab, viewMode]);
 
   // Check localStorage on mount
   useEffect(() => {
     try {
       const cachedName = localStorage.getItem(STORAGE_KEY_NAME);
-      if (cachedName) {
-        setUserName(cachedName);
-      }
+      if (cachedName) setUserName(cachedName);
+
+      const cachedView = localStorage.getItem(STORAGE_KEY_VIEW);
+      if (cachedView) setViewMode(cachedView);
+
       const raw = localStorage.getItem(STORAGE_KEY_DATA);
       if (raw) {
         const parsed = JSON.parse(raw);
@@ -277,6 +296,11 @@ export default function App() {
       console.warn('Could not read cached library data:', e);
     }
   }, []);
+
+  const handleSetViewMode = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem(STORAGE_KEY_VIEW, mode);
+  };
 
   const persistState = (newSeries, newStandalone, newWantToRead, newStats, nameToSave) => {
     try {
@@ -304,8 +328,8 @@ export default function App() {
     if (willBeRead) {
       soundFX.playUnlock();
       confetti({
-        particleCount: 40,
-        spread: 50,
+        particleCount: 45,
+        spread: 55,
         origin: { y: 0.65 },
         colors: ['#0071e3', '#34c759', '#ffffff'],
       });
@@ -377,7 +401,6 @@ export default function App() {
       return b;
     });
 
-    // Recompute library stats
     let totalRead = 0;
     let totalMissing = 0;
     let totalWantToRead = 0;
@@ -529,7 +552,6 @@ export default function App() {
   const hasData = seriesList.length > 0 || standaloneBooks.length > 0 || wantToReadStandalone.length > 0;
 
   // 1. ACTIVE SERIES: Series where AT LEAST ONE book has been read!
-  // Any "want-to-read" or missing companions stay beside the already read books!
   const activeSeries = useMemo(() => {
     return seriesList.filter((s) => s.books.some((b) => b.isRead));
   }, [seriesList]);
@@ -537,7 +559,7 @@ export default function App() {
   // 2. UNSTARTED WANT-TO-READ SERIES: 0 books read, but contains want-to-read books!
   const wantToReadSeries = useMemo(() => {
     return seriesList
-      .filter((s) => !s.books.some((b) => b.isRead)) // 0 books read in this series
+      .filter((s) => !s.books.some((b) => b.isRead))
       .filter((s) => s.books.some((b) => b.isWantToRead));
   }, [seriesList]);
 
@@ -627,11 +649,14 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col font-sans selection:bg-[#0071e3] selection:text-white relative bg-[#0c0d12] text-neutral-100 overflow-x-hidden">
+    <div className="min-h-screen flex flex-col font-sans selection:bg-[#0071e3] selection:text-white relative bg-[#07080d] text-neutral-100 overflow-x-hidden">
+      {/* Living Atmospheric Library Dust & Light Aura */}
+      <AmbientCanvas />
+
       {/* Global Fixed Non-Clipping Tooltip */}
       <GlobalBookTooltip activeHover={activeHover} isNight={true} />
 
-      {/* Navbar with Instant Search */}
+      {/* Apple-level Refined Navbar with Instant Search */}
       <Navbar
         userName={userName}
         onUpdateUserName={handleUpdateUserName}
@@ -640,8 +665,6 @@ export default function App() {
         onResetLibrary={handleResetLibrary}
         onOpenOpenLibraryInfo={() => setIsOpenLibraryInfoOpen(true)}
         hasData={hasData}
-        bookSize={bookSize}
-        onChangeBookSize={(sz) => setBookSize(sz)}
         seriesList={seriesList}
         standaloneBooks={standaloneBooks}
         wantToReadStandalone={wantToReadStandalone}
@@ -649,7 +672,7 @@ export default function App() {
       />
 
       {/* Main Bookshelf Area */}
-      <main className="flex-1 w-full pt-4 pb-16 relative z-10">
+      <main className="flex-1 w-full pt-4 pb-28 relative z-10">
         {/* Animated Sorting Loader */}
         {isLoading && (
           <SortingBooksLoader totalBooks={loadingBookCount} />
@@ -663,12 +686,20 @@ export default function App() {
           />
         )}
 
-        {/* Loaded Shelves Area */}
+        {/* Loaded Shelves & Views Area */}
         {!isLoading && hasData && (
           <div className="w-full">
+            {/* Dark Luxury Editorial Stats Codex */}
+            <StatsHeader
+              stats={stats}
+              userName={userName}
+              onUpdateUserName={handleUpdateUserName}
+              onResetLibrary={handleResetLibrary}
+            />
+
             {/* Elegant Tab Switcher: My Library vs Want to Read */}
             <div className="flex items-center justify-between flex-wrap gap-3 max-w-[1260px] mx-auto px-3 sm:px-6 mb-5 select-none">
-              <div className="inline-flex items-center p-1 rounded-full bg-white/[0.05] border border-white/10 backdrop-blur-xl shadow-lg">
+              <div className="inline-flex items-center p-1 rounded-full bg-white/[0.04] border border-white/10 backdrop-blur-2xl shadow-lg">
                 <button
                   onClick={() => {
                     soundFX.playClick();
@@ -676,14 +707,14 @@ export default function App() {
                   }}
                   className={`flex items-center gap-2 px-4 sm:px-6 py-2 rounded-full text-xs font-semibold tracking-tight transition-all ${
                     activeTab === 'library'
-                      ? 'bg-[#0071e3] text-white shadow-md'
+                      ? 'bg-[#0071e3] text-white shadow-[0_2px_12px_rgba(0,113,227,0.5)]'
                       : 'text-neutral-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
                   <BookOpen className="w-3.5 h-3.5" />
                   <span>My Library</span>
                   <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                    activeTab === 'library' ? 'bg-black/25 text-white' : 'bg-white/10 text-neutral-400'
+                    activeTab === 'library' ? 'bg-black/30 text-white' : 'bg-white/10 text-neutral-400'
                   }`}>
                     {libraryBookCount}
                   </span>
@@ -696,14 +727,14 @@ export default function App() {
                   }}
                   className={`flex items-center gap-2 px-4 sm:px-6 py-2 rounded-full text-xs font-semibold tracking-tight transition-all ${
                     activeTab === 'wantToRead'
-                      ? 'bg-[#0071e3] text-white shadow-md'
+                      ? 'bg-[#0071e3] text-white shadow-[0_2px_12px_rgba(0,113,227,0.5)]'
                       : 'text-neutral-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
                   <Bookmark className="w-3.5 h-3.5" />
                   <span>Want to Read</span>
                   <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                    activeTab === 'wantToRead' ? 'bg-black/25 text-white' : 'bg-white/10 text-neutral-400'
+                    activeTab === 'wantToRead' ? 'bg-black/30 text-white' : 'bg-white/10 text-neutral-400'
                   }`}>
                     {wantToReadBookCount}
                   </span>
@@ -711,9 +742,9 @@ export default function App() {
               </div>
 
               {/* Informative Sub-caption */}
-              <div className="text-[11px] text-neutral-400 hidden sm:block">
+              <div className="text-[11px] text-neutral-400 hidden sm:block font-mono">
                 {activeTab === 'library' ? (
-                  <span>Showing <strong>read tomes</strong> & <strong>active series</strong> with upcoming editions</span>
+                  <span>Showing <strong>read tomes</strong> & <strong>active series</strong> companions</span>
                 ) : (
                   <span>Showing your <strong>unstarted wishlist series</strong> & <strong>TBR books</strong></span>
                 )}
@@ -726,7 +757,7 @@ export default function App() {
                 <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4 text-amber-400">
                   <Bookmark className="w-6 h-6" />
                 </div>
-                <h3 className="text-base font-semibold text-white">Your Want to Read Shelf is Empty</h3>
+                <h3 className="font-editorial text-base font-bold text-white">Your Want to Read Shelf is Empty</h3>
                 <p className="text-xs text-neutral-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
                   Books or unstarted series you mark as "Want to Read" in Goodreads will be collected right here on this shelf.
                 </p>
@@ -739,8 +770,8 @@ export default function App() {
               </div>
             )}
 
-            {/* Architectural Built-In Bookshelf Stack */}
-            {(activeTab === 'library' || wantToReadBookCount > 0) && (
+            {/* VIEW MODE 1: ARCHITECTURAL WALL SHELVES */}
+            {viewMode === 'shelves' && (activeTab === 'library' || wantToReadBookCount > 0) && (
               <div
                 ref={shelfContainerRef}
                 className="w-full max-w-[1260px] mx-auto px-3 sm:px-6 relative"
@@ -748,10 +779,10 @@ export default function App() {
                 {/* Shelf Stack Unit Frame */}
                 <div className="relative w-full">
                   {/* Left Upright Frame Rail */}
-                  <div className="absolute -left-2 sm:-left-3 top-0 bottom-0 w-2.5 sm:w-3.5 rounded-sm bg-gradient-to-r from-[#14151b] to-[#22242e] border-r border-white/10 shadow-lg z-10 pointer-events-none" />
+                  <div className="absolute -left-2 sm:-left-3 top-0 bottom-0 w-2.5 sm:w-3.5 rounded-sm bg-gradient-to-r from-[#12131a] to-[#20222d] border-r border-white/10 shadow-lg z-10 pointer-events-none" />
 
                   {/* Right Upright Frame Rail */}
-                  <div className="absolute -right-2 sm:-right-3 top-0 bottom-0 w-2.5 sm:w-3.5 rounded-sm bg-gradient-to-l from-[#14151b] to-[#22242e] border-l border-white/10 shadow-lg z-10 pointer-events-none" />
+                  <div className="absolute -right-2 sm:-right-3 top-0 bottom-0 w-2.5 sm:w-3.5 rounded-sm bg-gradient-to-l from-[#12131a] to-[#20222d] border-l border-white/10 shadow-lg z-10 pointer-events-none" />
 
                   {/* Continuous Shelves Stack */}
                   <div className="w-full">
@@ -770,19 +801,53 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            {/* VIEW MODE 2: 3D PERSPECTIVE SLAB STACK (Pinterest Pin 2 & Pin 1) */}
+            {viewMode === 'stack' && (activeTab === 'library' || wantToReadBookCount > 0) && (
+              <Hero3DStack
+                seriesList={seriesList}
+                standaloneBooks={standaloneBooks}
+                wantToReadStandalone={wantToReadStandalone}
+                activeTab={activeTab}
+                onInspectBook={(book) => setSelectedBook(book)}
+                onToggleRead={handleToggleRead}
+              />
+            )}
+
+            {/* VIEW MODE 3: 3D DIAGONAL ACRYLIC JEWEL RAIL (Pinterest Pin 3) */}
+            {viewMode === 'rail' && (activeTab === 'library' || wantToReadBookCount > 0) && (
+              <Jewel3DRail
+                seriesList={seriesList}
+                standaloneBooks={standaloneBooks}
+                wantToReadStandalone={wantToReadStandalone}
+                activeTab={activeTab}
+                onInspectBook={(book) => setSelectedBook(book)}
+                onToggleRead={handleToggleRead}
+              />
+            )}
           </div>
         )}
       </main>
 
+      {/* Floating Apple-Style Interactive Dock */}
+      {hasData && (
+        <InteractiveDock
+          viewMode={viewMode}
+          onChangeViewMode={handleSetViewMode}
+          bookSize={bookSize}
+          onChangeBookSize={(sz) => setBookSize(sz)}
+        />
+      )}
+
       {/* Clean Dark Footer */}
       <footer className="w-full py-6 text-center text-xs text-neutral-500 border-t border-white/[0.06] mt-auto relative z-10 select-none">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>{userName ? `${userName}'s Library` : 'Bookshelf'} • {stats.totalRead} Books Read</span>
-          <span className="text-[11px] text-neutral-600">Built for avid readers & collectors</span>
+          <span className="font-editorial text-xs">{userName ? `${userName}'s Bibliotheca` : 'Bookshelf Codex'} &bull; {stats.totalRead} Tomes Archived</span>
+          <span className="text-[11px] text-neutral-600 font-mono">Press 1: Shelves &bull; 2: 3D Stack &bull; 3: Jewel Rail</span>
         </div>
       </footer>
 
-      {/* Modals */}
+      {/* Interactive 3D Turntable Modal */}
       {selectedBook && (
         <BookDetailModal
           book={selectedBook}
@@ -791,6 +856,7 @@ export default function App() {
         />
       )}
 
+      {/* Import CSV Modal */}
       {isImportOpen && (
         <ImportModal
           onClose={() => setIsImportOpen(false)}
@@ -799,6 +865,7 @@ export default function App() {
         />
       )}
 
+      {/* Open Library Info Modal */}
       {isOpenLibraryInfoOpen && (
         <OpenLibraryInfoModal
           onClose={() => setIsOpenLibraryInfoOpen(false)}

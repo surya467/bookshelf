@@ -1,6 +1,11 @@
 import React from 'react';
 import Book3D from './Book3D';
 
+/**
+ * WallShelf: Built-in Architectural Bookshelf Row.
+ * Features titanium / dark walnut shelf ledges, brass series plaques,
+ * and minimal bookend dividers.
+ */
 export default function WallShelf({
   shelfItems = [],
   series,
@@ -13,7 +18,6 @@ export default function WallShelf({
   onHoverStart,
   onHoverEnd,
 }) {
-  // Normalize items for the shelf
   let items = [];
 
   if (shelfItems && shelfItems.length > 0) {
@@ -28,23 +32,10 @@ export default function WallShelf({
 
   if (items.length === 0) return null;
 
-  // Pass-through vertical wheel events when hovering over shelf container
-  const handleWheel = (e) => {
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) * 0.8) {
-      window.scrollBy({
-        top: e.deltaY,
-        behavior: 'auto',
-      });
-    }
-  };
-
   return (
-    <div className="relative mb-5 sm:mb-6 animate-fadeIn w-full">
+    <div className="relative mb-6 sm:mb-8 animate-fadeIn w-full">
       {/* Content Container */}
-      <div
-        onWheel={handleWheel}
-        className="relative w-full pb-0 pt-2 px-2 sm:px-3"
-      >
+      <div className="relative w-full pb-0 pt-2 px-2 sm:px-3">
         <div className="flex items-end gap-2 sm:gap-2.5 w-full justify-start">
           {items.map((item, itemIdx) => {
             const isLast = itemIdx === items.length - 1;
@@ -55,11 +46,11 @@ export default function WallShelf({
                 <React.Fragment key={s.id || `series-${itemIdx}`}>
                   {/* Series Block */}
                   <div id={`series-${s.id || itemIdx}`} className="flex flex-col flex-shrink-0 scroll-mt-24">
-                    {/* Series Title: Placed at top starting from left of 1st book */}
-                    <div className="flex items-center gap-1.5 mb-1.5 pl-0.5 select-none">
+                    {/* Series Title: Placed at top with Editorial Serif */}
+                    <div className="flex items-center gap-2 mb-2 pl-0.5 select-none">
                       <span
                         title={s.name}
-                        className={`text-[11px] sm:text-[12px] font-semibold tracking-tight truncate text-neutral-200 ${
+                        className={`font-editorial text-xs sm:text-[13px] font-bold tracking-tight truncate text-neutral-200 ${
                           s.books.length === 1
                             ? 'max-w-[105px] sm:max-w-[115px]'
                             : s.books.length === 2
@@ -69,11 +60,11 @@ export default function WallShelf({
                       >
                         {s.name}
                       </span>
-                      <span className="text-[9.5px] font-mono px-1.5 py-0.2 rounded-full font-normal bg-white/10 text-neutral-400">
+                      <span className="text-[9.5px] font-mono px-1.5 py-0.2 rounded-full font-medium bg-white/10 text-neutral-300">
                         {s.readCount}/{s.totalCount}
                       </span>
                       {s.isCompleted && (
-                        <span className="text-[9px] font-medium px-1.5 py-0.2 rounded text-emerald-400 bg-emerald-500/15 border border-emerald-500/20">
+                        <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded text-emerald-300 bg-emerald-500/15 border border-emerald-500/20">
                           Complete
                         </span>
                       )}
@@ -94,10 +85,10 @@ export default function WallShelf({
                     </div>
                   </div>
 
-                  {/* Clean Minimalist Bookend Divider between different series on same shelf */}
+                  {/* Minimalist Machined Titanium Bookend Divider */}
                   {!isLast && (
                     <div className="flex flex-col justify-end self-end h-[95px] sm:h-[110px] px-1.5 sm:px-2 pb-1 select-none pointer-events-none">
-                      <div className="w-[2px] h-9 rounded-full bg-white/15" />
+                      <div className="w-[2px] h-10 rounded-full bg-gradient-to-b from-white/20 via-white/10 to-transparent shadow-sm" />
                     </div>
                   )}
                 </React.Fragment>
@@ -112,10 +103,10 @@ export default function WallShelf({
                 <React.Fragment key={`standalone-${itemIdx}`}>
                   {/* Standalone Single Books Sitting in Remaining Shelf Space */}
                   <div className="flex flex-col flex-shrink-0 scroll-mt-24">
-                    <div className="flex items-center gap-1.5 mb-1.5 pl-0.5 select-none">
+                    <div className="flex items-center gap-2 mb-2 pl-0.5 select-none">
                       <span
                         title={groupTitle}
-                        className={`text-[11px] sm:text-[12px] font-semibold tracking-tight text-neutral-300 truncate ${
+                        className={`font-editorial text-xs sm:text-[13px] font-bold tracking-tight text-neutral-300 truncate ${
                           books.length === 1
                             ? 'max-w-[105px] sm:max-w-[115px]'
                             : books.length === 2
@@ -125,7 +116,7 @@ export default function WallShelf({
                       >
                         {groupTitle}
                       </span>
-                      <span className="text-[9.5px] font-mono px-1.5 py-0.2 rounded-full bg-white/10 text-neutral-400">
+                      <span className="text-[9.5px] font-mono px-1.5 py-0.2 rounded-full bg-white/10 text-neutral-300">
                         {books.length}
                       </span>
                     </div>
@@ -148,7 +139,7 @@ export default function WallShelf({
                   {/* Bookend Divider if followed by another item */}
                   {!isLast && (
                     <div className="flex flex-col justify-end self-end h-[95px] sm:h-[110px] px-1.5 sm:px-2 pb-1 select-none pointer-events-none">
-                      <div className="w-[2px] h-9 rounded-full bg-white/15" />
+                      <div className="w-[2px] h-10 rounded-full bg-gradient-to-b from-white/20 via-white/10 to-transparent shadow-sm" />
                     </div>
                   )}
                 </React.Fragment>
@@ -160,13 +151,13 @@ export default function WallShelf({
         </div>
       </div>
 
-      {/* Sleek Architectural Dark Shelf Ledge */}
+      {/* Sleek Architectural Dark Shelf Ledge with Specular Edge */}
       <div className="relative w-full z-0 -mt-0.5 px-0.5 sm:px-1 select-none pointer-events-none">
         {/* Top Shelf Face with Bevel Edge */}
-        <div className="h-2 w-full rounded-t-[2px] bg-gradient-to-b from-[#22242e] to-[#16171f] border-t border-white/15" />
+        <div className="h-2 w-full rounded-t-[2px] bg-gradient-to-b from-[#252834] to-[#181922] border-t border-white/20" />
 
-        {/* Shelf Front Fascia Rail */}
-        <div className="h-2.5 w-full rounded-b-[2px] dark-shelf-ledge" />
+        {/* Shelf Front Fascia Rail with ambient shadow */}
+        <div className="h-3 w-full rounded-b-[2px] dark-shelf-ledge" />
       </div>
     </div>
   );
